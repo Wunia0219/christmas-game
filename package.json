@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node scripts/site.mjs dev",
     "build": "node scripts/site.mjs build",
-    "preview": "node scripts/site.mjs preview"
+    "preview": "node scripts/site.mjs preview",
+    "test": "node --test"
   },
   "dependencies": {
     "@fontsource/archivo-black": "^5.2.8",

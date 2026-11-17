@@ -3,28 +3,32 @@ export const HEIGHT = 480;
 export const LIVES = 3;
 export const BALL_RADIUS = 7;
 export const PADDLE = { width: 112, height: 13, y: 447 };
+export const DROP_RADIUS = 11;
+export const GUARD = { y: 470, width: 210, height: 8 };
+export const BUFF_DURATION = 12;
+export const BUFFS = ['wide', 'fast', 'guards'];
 
 const layouts = [
   [
     '##########',
-    '##########',
-    '##########',
-    '##########',
-    '##########',
+    '##?#######',
+    '#######B##',
+    '#B########',
+    '###?##B#?#',
   ],
   [
     '....##....',
-    '...####...',
-    '..######..',
-    '.########.',
-    '##########',
+    '...##?#...',
+    '..###B##..',
+    '.#?######.',
+    '##B##?##B#',
   ],
   [
     '###.##.###',
-    '#.######.#',
-    '##.####.##',
-    '#.######.#',
-    '###.##.###',
+    '#.##B###.#',
+    '#B.###?.##',
+    '#.?#B###.#',
+    '#?#.#?.#B#',
   ],
 ];
 
@@ -33,18 +37,22 @@ export const LEVELS = layouts.length;
 const BRICK = { width: 65, height: 23, gap: 8, top: 36 };
 const INITIAL_SPEED = 365;
 const MAX_SPEED = 585;
+const PADDLE_SPEED = 700;
+const DROP_SPEED = 145;
+const MAX_STEP = 1 / 120;
 const SEPARATION = 0.01;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 function makeBricks(level) {
   return layouts[level - 1].flatMap((row, y) => {
     const left = (WIDTH - (row.length * (BRICK.width + BRICK.gap) - BRICK.gap)) / 2;
-    return [...row].flatMap((cell, x) => cell === '#' ? [{
+    return [...row].flatMap((cell, x) => cell !== '.' ? [{
       x: left + x * (BRICK.width + BRICK.gap),
       y: BRICK.top + y * (BRICK.height + BRICK.gap),
       width: BRICK.width,
       height: BRICK.height,
       row: y,
+      kind: cell === 'B' ? 'extra-ball' : cell === '?' ? 'buff' : 'standard',
       points: (5 - y) * 10,
       active: true,
     }] : []);
@@ -86,20 +94,40 @@ export class Game {
   loadLevel(phase) {
     this.bricks = makeBricks(this.level);
     this.remaining = this.bricks.length;
-    this.resetBall();
+    this.playTime = 0;
+    this.clearPowerUps();
+    this.stageBall();
     this.phase = phase;
   }
 
-  resetBall() {
+  clearPowerUps() {
+    this.effects = {};
+    this.drops = [];
+    this.guards = [];
+  }
+
+  stageBall() {
     this.paddleX = WIDTH / 2;
-    this.ball = { x: this.paddleX, y: PADDLE.y - BALL_RADIUS - 4, vx: 0, vy: 0 };
+    this.balls = [{ x: this.paddleX, y: PADDLE.y - BALL_RADIUS - 4, vx: 0, vy: 0 }];
+  }
+
+  effectTimeLeft(kind) {
+    return Math.max(0, (this.effects[kind] ?? 0) - this.playTime);
+  }
+
+  get paddleWidth() {
+    return PADDLE.width + (this.effectTimeLeft('wide') > 0 ? 64 : 0);
+  }
+
+  get paddleSpeed() {
+    return PADDLE_SPEED * (this.effectTimeLeft('fast') > 0 ? 1.6 : 1);
   }
 
   movePaddle(x) {
     if (this.phase !== 'ready' && this.phase !== 'serve' && this.phase !== 'playing') return;
-    const half = PADDLE.width / 2;
+    const half = this.paddleWidth / 2;
     this.paddleX = clamp(x, half + 8, WIDTH - half - 8);
-    if (this.phase !== 'playing') this.ball.x = this.paddleX;
+    if (this.phase !== 'playing') this.balls[0].x = this.paddleX;
   }
 
   action() {
@@ -116,8 +144,9 @@ export class Game {
 
     const speed = INITIAL_SPEED + (this.level - 1) * 32;
     const direction = this.paddleX > WIDTH / 2 ? -1 : 1;
-    this.ball.vx = speed * 0.36 * direction;
-    this.ball.vy = -Math.sqrt(speed ** 2 - this.ball.vx ** 2);
+    const [ball] = this.balls;
+    ball.vx = speed * 0.36 * direction;
+    ball.vy = -Math.sqrt(speed ** 2 - ball.vx ** 2);
     this.phase = 'playing';
     this.onEvent('launch');
   }
@@ -127,8 +156,7 @@ export class Game {
     else if (this.phase === 'paused') this.phase = 'playing';
   }
 
-  findContact(duration) {
-    const ball = this.ball;
+  findContact(ball, duration) {
     let closest = null;
     const consider = (contact) => {
       if (contact && contact.time >= 0 && contact.time <= duration && (!closest || contact.time < closest.time)) {
@@ -146,8 +174,15 @@ export class Game {
     if (ball.vy > 0) {
       const time = (PADDLE.y - BALL_RADIUS - ball.y) / ball.vy;
       const hitX = ball.x + ball.vx * time;
-      if (Math.abs(hitX - this.paddleX) <= PADDLE.width / 2 + BALL_RADIUS) {
+      if (Math.abs(hitX - this.paddleX) <= this.paddleWidth / 2 + BALL_RADIUS) {
         consider({ time, axis: 'y', kind: 'paddle' });
+      }
+      const guardTime = (GUARD.y - BALL_RADIUS - ball.y) / ball.vy;
+      const guardX = ball.x + ball.vx * guardTime;
+      for (const guard of this.guards) {
+        if (Math.abs(guardX - guard.x) <= GUARD.width / 2 + BALL_RADIUS) {
+          consider({ time: guardTime, axis: 'y', kind: 'guard', guard });
+        }
       }
       consider({ time: (HEIGHT + BALL_RADIUS - ball.y) / ball.vy, kind: 'miss' });
     }
@@ -157,31 +192,89 @@ export class Game {
     return closest;
   }
 
-  update(seconds) {
-    const ball = this.ball;
-    let timeLeft = seconds;
-    for (let bounce = 0; bounce < 8 && timeLeft > 0 && this.phase === 'playing'; bounce += 1) {
-      const contact = this.findContact(timeLeft);
-      const elapsed = contact?.time ?? timeLeft;
-      ball.x += ball.vx * elapsed;
-      ball.y += ball.vy * elapsed;
-      timeLeft -= elapsed;
-      if (contact) this.handleContact(contact);
+  update(seconds, { direction = 0, pointerX } = {}) {
+    if (this.phase !== 'playing') {
+      if (direction) this.movePaddle(this.paddleX + direction * this.paddleSpeed * seconds);
+      return;
+    }
+
+    while (seconds > 0 && this.phase === 'playing') {
+      const step = Math.min(seconds, MAX_STEP);
+      this.updatePlay(step, direction, pointerX);
+      seconds -= step;
     }
   }
 
-  handleContact(contact) {
-    const ball = this.ball;
-    if (contact.kind === 'miss') {
+  updatePlay(seconds, direction, pointerX) {
+    this.playTime += seconds;
+    if (this.effectTimeLeft('guards') === 0) this.guards.length = 0;
+
+    const keyboardStep = this.paddleSpeed * seconds;
+    const pointerStep = keyboardStep * 1.6;
+    const offset = direction || pointerX === undefined
+      ? direction * keyboardStep
+      : clamp(pointerX - this.paddleX, -pointerStep, pointerStep);
+    this.movePaddle(this.paddleX + offset);
+
+    // A ball released during this step starts moving on the next step.
+    for (let index = this.balls.length - 1; index >= 0; index -= 1) {
+      if (!this.updateBall(this.balls[index], seconds)) this.balls.splice(index, 1);
+      if (this.phase !== 'playing') return;
+    }
+
+    if (this.balls.length === 0) {
       this.lives -= 1;
       this.phase = this.lives > 0 ? 'serve' : 'lost';
-      this.resetBall();
+      this.clearPowerUps();
+      if (this.lives > 0) this.stageBall();
       this.onEvent('miss');
       return;
     }
 
+    this.updateDrops(seconds);
+  }
+
+  updateDrops(seconds) {
+    const catchY = PADDLE.y - DROP_RADIUS;
+    for (let index = this.drops.length - 1; index >= 0; index -= 1) {
+      const drop = this.drops[index];
+      const previousY = drop.y;
+      drop.y += DROP_SPEED * seconds;
+      if (previousY <= catchY && drop.y >= catchY && Math.abs(drop.x - this.paddleX) <= this.paddleWidth / 2 + DROP_RADIUS) {
+        this.drops.splice(index, 1);
+        this.activateBuff(BUFFS[Math.floor(Math.random() * BUFFS.length)]);
+      } else if (drop.y > HEIGHT + DROP_RADIUS) {
+        this.drops.splice(index, 1);
+      }
+    }
+  }
+
+  activateBuff(kind) {
+    this.effects[kind] = this.playTime + BUFF_DURATION;
+    if (kind === 'wide') this.movePaddle(this.paddleX);
+    if (kind === 'guards') {
+      this.guards = [137, WIDTH / 2, WIDTH - 137].map((x) => ({ x }));
+    }
+    this.onEvent('buff', kind);
+  }
+
+  updateBall(ball, seconds) {
+    let timeLeft = seconds;
+    for (let bounce = 0; bounce < 8 && timeLeft > 0 && this.phase === 'playing'; bounce += 1) {
+      const contact = this.findContact(ball, timeLeft);
+      const elapsed = contact?.time ?? timeLeft;
+      ball.x += ball.vx * elapsed;
+      ball.y += ball.vy * elapsed;
+      timeLeft -= elapsed;
+      if (contact?.kind === 'miss') return false;
+      if (contact) this.handleContact(ball, contact);
+    }
+    return true;
+  }
+
+  handleContact(ball, contact) {
     if (contact.kind === 'paddle') {
-      const aim = clamp((ball.x - this.paddleX) / (PADDLE.width / 2), -1, 1);
+      const aim = clamp((ball.x - this.paddleX) / (this.paddleWidth / 2), -1, 1);
       const direction = Math.sign(aim || ball.vx || 1);
       const angle = Math.max(0.13, Math.abs(aim) * 1.06) * direction;
       const speed = Math.min(MAX_SPEED, Math.hypot(ball.vx, ball.vy) + 4);
@@ -202,10 +295,31 @@ export class Game {
       brick.active = false;
       this.score += brick.points;
       this.remaining -= 1;
-      if (this.remaining === 0) this.phase = this.level < LEVELS ? 'level-clear' : 'won';
-      this.onEvent(this.remaining === 0 ? 'clear' : 'brick', brick);
-    } else {
-      this.onEvent(contact.kind);
+      if (this.remaining === 0) {
+        this.phase = this.level < LEVELS ? 'level-clear' : 'won';
+        this.balls = [];
+        this.clearPowerUps();
+        this.onEvent('clear', brick);
+        return;
+      }
+
+      const x = brick.x + brick.width / 2;
+      const y = brick.y + brick.height / 2;
+      if (brick.kind === 'extra-ball') {
+        const vx = (x < WIDTH / 2 ? 1 : -1) * 105;
+        this.balls.push({ x, y, vx, vy: 310, bonus: true });
+        this.onEvent('extra-ball', brick);
+      } else {
+        if (brick.kind === 'buff') this.drops.push({ x, y });
+        this.onEvent('brick', brick);
+      }
+      return;
     }
+
+    if (contact.kind === 'guard') {
+      this.guards.splice(this.guards.indexOf(contact.guard), 1);
+      if (this.guards.length === 0) delete this.effects.guards;
+    }
+    this.onEvent(contact.kind);
   }
 }

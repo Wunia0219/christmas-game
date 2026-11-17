@@ -25,7 +25,10 @@
       <div class="hero">
         <div>
           <h1>ARKANOID<span class="title-translation">打磚塊</span></h1>
-          <p>接住彈球，打破所有磚塊。</p>
+          <div class="brick-legend" aria-label="特殊磚塊">
+            <span><i class="brick-mark extra-ball-mark" aria-hidden="true"></i>擊破釋放額外球</span>
+            <span><i class="brick-mark buff-mark" aria-hidden="true">?</i>接住掉落道具可強化</span>
+          </div>
         </div>
         <div class="hero-art" aria-hidden="true">
           <span></span><span></span><span></span><i></i><b></b>
@@ -35,7 +38,10 @@
       <div class="cabinet">
         <section class="game-frame" aria-label="打磚塊遊戲">
           <header class="game-header">
-            <div class="game-status"><span class="status-light" aria-hidden="true"></span><span id="status">準備就緒</span></div>
+            <div class="game-status">
+              <span class="status-light" aria-hidden="true"></span><span id="status">準備就緒</span>
+              <span class="ball-count" id="ball-count" hidden></span>
+            </div>
             <button class="button pause-button" id="pause" type="button" disabled>
               <i class="pause-icon" aria-hidden="true"></i><span id="pause-label">暫停</span>
             </button>
@@ -78,6 +84,14 @@
               <div class="stat-row"><span class="stat-label" id="brick-label">剩餘磚塊</span><span class="figures" id="remaining">50</span></div>
               <progress id="progress" aria-labelledby="brick-label" max="50" value="50"></progress>
             </div>
+            <section class="buff-status" aria-label="限時強化">
+              <div class="buff-heading"><span class="stat-label">限時強化</span><span class="buff-idle" id="buff-idle">待收集</span></div>
+              <ul class="buff-list" id="buff-list" hidden>
+                <li id="buff-wide" hidden><span>球拍加長</span><span class="buff-time"></span></li>
+                <li id="buff-fast" hidden><span>球拍加速</span><span class="buff-time"></span></li>
+                <li id="buff-guards" hidden><span>底線保護 <span id="guard-count"></span></span><span class="buff-time"></span></li>
+              </ul>
+            </section>
           </section>
 
           <button class="button restart-button" id="restart" type="button" disabled><span aria-hidden="true">↻</span> 重新開始</button>

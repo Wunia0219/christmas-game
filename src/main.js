@@ -1,5 +1,5 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import { BALL_RADIUS, Game, HEIGHT, LEVELS, PADDLE, WIDTH } from './game.js';
+import { BALL_RADIUS, BUFFS, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, PADDLE, WIDTH } from './game.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -13,11 +13,24 @@ const score = byId('score');
 const best = byId('best');
 const lives = byId('lives');
 const progress = byId('progress');
+const ballCount = byId('ball-count');
+const buffList = byId('buff-list');
+const buffIdle = byId('buff-idle');
+const guardCount = byId('guard-count');
+const announcement = byId('announcement');
 const hearts = [...lives.children];
+const buffRows = BUFFS.map((kind) => {
+  const row = byId(`buff-${kind}`);
+  return { kind, row, timer: row.querySelector('.buff-time') };
+});
 
 const scoreKey = 'arkanoid.best';
 const hues = [0xfd798f, 0xffa069, 0xffd86b, 0x70dfcd, 0xa895ff];
 const shadows = [0xb04369, 0xb85840, 0xb88947, 0x358b86, 0x6d52b5];
+const powerColors = { 'extra-ball': 0x8ef0ed, buff: 0xffa6d1 };
+const powerShadows = { 'extra-ball': 0x398985, buff: 0xaa397b };
+const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護' };
+const dark = 0x252142;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const number = (value, digits) => String(value).padStart(digits, '0');
 
@@ -36,6 +49,9 @@ const tones = {
   wall: [190, 160, 0.045],
   paddle: [300, 400, 0.07],
   brick: [600, 900, 0.075],
+  'extra-ball': [580, 1030, 0.15],
+  buff: [750, 1250, 0.18],
+  guard: [380, 690, 0.12],
   clear: [430, 1050, 0.28],
   miss: [270, 100, 0.23],
 };
@@ -70,14 +86,26 @@ function playSound(event) {
   tone.stop(now + duration);
 }
 
+function drawPowerMark(graphic, kind, x, y) {
+  if (kind === 'extra-ball') {
+    graphic.circle(x - 5, y, 3).fill(dark).circle(x + 5, y, 3).fill(dark);
+    return;
+  }
+  graphic.moveTo(x - 3, y - 3).lineTo(x - 2, y - 5).lineTo(x + 2, y - 5)
+    .lineTo(x + 4, y - 3).lineTo(x + 4, y - 1).lineTo(x, y + 1).lineTo(x, y + 2)
+    .stroke({ color: dark, width: 2, cap: 'round', join: 'round' })
+    .circle(x, y + 5, 1.15).fill(dark);
+}
+
 function drawBrick(brick) {
-  const { width, height, row } = brick;
+  const { width, height, row, kind } = brick;
   const graphic = new Graphics()
     .roundRect(0, 3, width, height, 3).fill(0x0b0a1b)
-    .roundRect(0, 0, width, height, 3).fill(shadows[row])
-    .roundRect(0, 0, width, height - 4, 3).fill(hues[row])
+    .roundRect(0, 0, width, height, 3).fill(powerShadows[kind] ?? shadows[row])
+    .roundRect(0, 0, width, height - 4, 3).fill(powerColors[kind] ?? hues[row])
     .rect(4, 3, width - 8, 2).fill({ color: 0xffffff, alpha: 0.38 })
     .rect(4, 7, 2, 2).fill({ color: 0xffffff, alpha: 0.45 });
+  if (kind !== 'standard') drawPowerMark(graphic, kind, width / 2, (height - 4) / 2);
   graphic.position.set(brick.x, brick.y);
   return graphic;
 }
@@ -102,16 +130,20 @@ async function init() {
     .roundRect(-PADDLE.width / 2, 0, PADDLE.width, PADDLE.height, 4).fill(0x9179ec)
     .roundRect(-PADDLE.width / 2, 0, PADDLE.width, PADDLE.height - 4, 4).fill(0xdaceff)
     .rect(-PADDLE.width / 2 + 9, 2, PADDLE.width - 18, 2).fill(0xf4eeff);
-  const ball = new Graphics()
-    .circle(0, 0, BALL_RADIUS + 5).fill({ color: 0xffdf6b, alpha: 0.2 })
-    .circle(0, 0, BALL_RADIUS).fill(0xffe27a)
-    .circle(-2, -2, 2.2).fill(0xfffacd);
-  app.stage.addChild(bricks, trail, particles, paddle, ball);
+  const balls = new Graphics();
+  const powerUps = new Graphics();
+  app.stage.addChild(bricks, trail, particles, powerUps, paddle, balls);
 
   let brickViews = new Map();
   let sparks = [];
-  const game = new Game((event, brick) => {
+  const game = new Game((event, payload) => {
     playSound(event);
+    if (event === 'buff') {
+      announcement.textContent = `獲得${buffNames[payload]}。`;
+      return;
+    }
+    if (event === 'extra-ball') announcement.textContent = '額外球已釋放。';
+    const brick = payload;
     if (brick) {
       brickViews.get(brick).visible = false;
       if (!reducedMotion.matches) {
@@ -122,7 +154,7 @@ async function init() {
             vx: (Math.random() - 0.5) * 180,
             vy: (Math.random() - 0.5) * 150,
             life: 0.28,
-            color: hues[brick.row],
+            color: powerColors[brick.kind] ?? hues[brick.row],
           });
         }
       }
@@ -134,8 +166,35 @@ async function init() {
   let displayedScore;
   let displayedLives;
   let displayedRemaining;
+  let displayedBallCount;
+  let displayedGuardCount;
+  let pointerX;
+
+  function syncPowerHud() {
+    if (displayedBallCount !== game.balls.length) {
+      displayedBallCount = game.balls.length;
+      ballCount.hidden = displayedBallCount <= 1;
+      ballCount.textContent = ballCount.hidden ? '' : `場上 ${displayedBallCount} 球`;
+    }
+    if (displayedGuardCount !== game.guards.length) {
+      displayedGuardCount = game.guards.length;
+      guardCount.textContent = `${displayedGuardCount} 個`;
+    }
+    let active = false;
+    for (const { kind, row, timer } of buffRows) {
+      const seconds = Math.ceil(game.effectTimeLeft(kind));
+      row.hidden = seconds === 0;
+      if (row.hidden) continue;
+      active = true;
+      const label = `${seconds} 秒`;
+      if (timer.textContent !== label) timer.textContent = label;
+    }
+    buffIdle.hidden = active;
+    buffList.hidden = !active;
+  }
 
   function syncHud() {
+    syncPowerHud();
     let levelChanged = false;
     if (displayedBricks !== game.bricks) {
       for (const old of bricks.removeChildren()) old.destroy();
@@ -175,11 +234,12 @@ async function init() {
     displayedPhase = game.phase;
     frame.dataset.phase = game.phase;
     byId('status').textContent = screen.status;
-    byId('announcement').textContent = game.phase === 'serve' ? `剩下 ${game.lives} 條命。${screen.title}。` : screen.status;
+    announcement.textContent = game.phase === 'serve' ? `剩下 ${game.lives} 條命。${screen.title}。` : screen.status;
     overlay.hidden = game.phase === 'playing';
     pauseButton.disabled = game.phase !== 'playing' && game.phase !== 'paused';
     byId('pause-label').textContent = game.phase === 'paused' ? '繼續' : '暫停';
     if (overlay.hidden) return;
+    pointerX = undefined;
     byId('message').textContent = screen.title;
     byId('action-label').textContent = screen.button;
     const detail = byId('detail');
@@ -200,24 +260,43 @@ async function init() {
   const leftKeys = ['ArrowLeft', 'KeyA'];
   const rightKeys = ['ArrowRight', 'KeyD'];
 
+  function renderPlayfield() {
+    paddle.position.set(game.paddleX, PADDLE.y);
+    paddle.scale.x = game.paddleWidth / PADDLE.width;
+    balls.clear();
+    trail.clear();
+    for (const { x, y, vx, vy, bonus } of game.balls) {
+      const color = bonus ? powerColors['extra-ball'] : 0xffe27a;
+      balls.circle(x, y, BALL_RADIUS + 5).fill({ color, alpha: 0.2 })
+        .circle(x, y, BALL_RADIUS).fill(color)
+        .circle(x - 2, y - 2, 2.2).fill(0xfffcf0);
+      if (reducedMotion.matches || game.phase !== 'playing') continue;
+      for (let index = 3; index >= 1; index -= 1) {
+        trail.circle(x - vx * index * 0.013, y - vy * index * 0.013, 6 - index)
+          .fill({ color, alpha: 0.36 / index });
+      }
+    }
+
+    powerUps.clear();
+    for (const { x, y } of game.drops) {
+      const radius = DROP_RADIUS;
+      powerUps.poly([x, y - radius, x + radius, y, x, y + radius, x - radius, y])
+        .fill(powerColors.buff).stroke({ color: 0xffdcf5, width: 1.5 });
+      drawPowerMark(powerUps, 'buff', x, y);
+    }
+    for (const { x } of game.guards) {
+      const left = x - GUARD.width / 2;
+      powerUps.roundRect(left, GUARD.y, GUARD.width, GUARD.height, 3).fill(powerShadows['extra-ball'])
+        .roundRect(left, GUARD.y, GUARD.width, GUARD.height - 3, 3).fill(powerColors['extra-ball']);
+    }
+  }
+
   app.ticker.add((ticker) => {
     const seconds = Math.min(ticker.deltaMS / 1000, 0.04);
     const direction = Number(rightKeys.some((key) => keys.has(key))) - Number(leftKeys.some((key) => keys.has(key)));
-    if (direction) game.movePaddle(game.paddleX + direction * 700 * seconds);
-    game.update(seconds);
+    game.update(seconds, { direction, pointerX });
     syncHud();
-
-    paddle.position.set(game.paddleX, PADDLE.y);
-    ball.visible = game.phase !== 'lost' && game.phase !== 'won';
-    ball.position.set(game.ball.x, game.ball.y);
-    trail.clear();
-    if (!reducedMotion.matches && game.phase === 'playing') {
-      for (let index = 3; index >= 1; index -= 1) {
-        trail.circle(game.ball.x - game.ball.vx * index * 0.013,
-          game.ball.y - game.ball.vy * index * 0.013, 6 - index)
-          .fill({ color: 0xffe27a, alpha: 0.36 / index });
-      }
-    }
+    renderPlayfield();
 
     particles.clear();
     if (game.phase === 'paused' || reducedMotion.matches) return;
@@ -243,6 +322,7 @@ async function init() {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (leftKeys.includes(event.code) || rightKeys.includes(event.code)) {
       event.preventDefault();
+      pointerX = undefined;
       keys.add(event.code);
     }
     if (event.code === 'Space' && !event.target.closest('button')) {
@@ -268,7 +348,9 @@ async function init() {
   let gesture;
   function moveToPointer(event) {
     const bounds = field.getBoundingClientRect();
-    game.movePaddle((event.clientX - bounds.left) / bounds.width * WIDTH);
+    const x = (event.clientX - bounds.left) / bounds.width * WIDTH;
+    if (game.phase === 'playing') pointerX = x;
+    else game.movePaddle(x);
   }
 
   field.addEventListener('pointerdown', (event) => {
@@ -297,6 +379,7 @@ async function init() {
   actionButton.addEventListener('click', primaryAction);
   pauseButton.addEventListener('click', togglePause);
   restartButton.addEventListener('click', () => {
+    pointerX = undefined;
     game.reset();
     syncHud();
     actionButton.focus({ preventScroll: true });
