@@ -38,6 +38,9 @@ const BRICK = { width: 65, height: 23, gap: 8, top: 36 };
 const INITIAL_SPEED = 365;
 const MAX_SPEED = 585;
 const PADDLE_SPEED = 700;
+const PADDLE_CONTACT_Y = PADDLE.y - BALL_RADIUS;
+const PADDLE_GRACE_TIME = 0.045;
+const PADDLE_GRACE_DEPTH = 18;
 const DROP_SPEED = 145;
 const MAX_STEP = 1 / 120;
 const SEPARATION = 0.01;
@@ -76,6 +79,22 @@ function brickContact(ball, brick) {
 
   if (time < 0 || time > Math.min(leaveX, leaveY)) return null;
   return { time, axis: enterX > enterY ? 'x' : 'y', brick, kind: 'brick' };
+}
+
+function paddleContactTime(ball, paddleX, paddleVelocity, reach) {
+  const crossing = (PADDLE_CONTACT_Y - ball.y) / ball.vy;
+  const start = Math.max(0, crossing);
+  // Downward speed stays constant in this band, so depth also gives the time since crossing.
+  const end = crossing + Math.min(PADDLE_GRACE_TIME, PADDLE_GRACE_DEPTH / ball.vy);
+  if (start > end) return null;
+
+  const relativeVelocity = ball.vx - paddleVelocity;
+  const separation = ball.x - paddleX + relativeVelocity * start;
+  if (Math.abs(separation) <= reach) return start;
+  if (separation * relativeVelocity >= 0) return null;
+
+  const time = start + (Math.abs(separation) - reach) / Math.abs(relativeVelocity);
+  return time <= end ? time : null;
 }
 
 export class Game {
@@ -156,7 +175,7 @@ export class Game {
     else if (this.phase === 'paused') this.phase = 'playing';
   }
 
-  findContact(ball, duration) {
+  findContact(ball, duration, paddleX, paddleVelocity) {
     let closest = null;
     const consider = (contact) => {
       if (contact && contact.time >= 0 && contact.time <= duration && (!closest || contact.time < closest.time)) {
@@ -172,9 +191,8 @@ export class Game {
       consider({ time: (BALL_RADIUS - ball.y) / ball.vy, axis: 'y', kind: 'wall' });
     }
     if (ball.vy > 0) {
-      const time = (PADDLE.y - BALL_RADIUS - ball.y) / ball.vy;
-      const hitX = ball.x + ball.vx * time;
-      if (Math.abs(hitX - this.paddleX) <= this.paddleWidth / 2 + BALL_RADIUS) {
+      const time = paddleContactTime(ball, paddleX, paddleVelocity, this.paddleWidth / 2 + BALL_RADIUS);
+      if (time !== null) {
         consider({ time, axis: 'y', kind: 'paddle' });
       }
       const guardTime = (GUARD.y - BALL_RADIUS - ball.y) / ball.vy;
@@ -214,11 +232,13 @@ export class Game {
     const offset = direction || pointerX === undefined
       ? direction * keyboardStep
       : clamp(pointerX - this.paddleX, -pointerStep, pointerStep);
+    const paddleStartX = this.paddleX;
     this.movePaddle(this.paddleX + offset);
+    const paddleVelocity = (this.paddleX - paddleStartX) / seconds;
 
     // A ball released during this step starts moving on the next step.
     for (let index = this.balls.length - 1; index >= 0; index -= 1) {
-      if (!this.updateBall(this.balls[index], seconds)) this.balls.splice(index, 1);
+      if (!this.updateBall(this.balls[index], seconds, paddleStartX, paddleVelocity)) this.balls.splice(index, 1);
       if (this.phase !== 'playing') return;
     }
 
@@ -258,28 +278,30 @@ export class Game {
     this.onEvent('buff', kind);
   }
 
-  updateBall(ball, seconds) {
+  updateBall(ball, seconds, paddleX, paddleVelocity) {
     let timeLeft = seconds;
     for (let bounce = 0; bounce < 8 && timeLeft > 0 && this.phase === 'playing'; bounce += 1) {
-      const contact = this.findContact(ball, timeLeft);
+      const contact = this.findContact(ball, timeLeft, paddleX, paddleVelocity);
       const elapsed = contact?.time ?? timeLeft;
       ball.x += ball.vx * elapsed;
       ball.y += ball.vy * elapsed;
+      paddleX += paddleVelocity * elapsed;
       timeLeft -= elapsed;
       if (contact?.kind === 'miss') return false;
-      if (contact) this.handleContact(ball, contact);
+      if (contact) this.handleContact(ball, contact, paddleX);
     }
     return true;
   }
 
-  handleContact(ball, contact) {
+  handleContact(ball, contact, paddleX) {
     if (contact.kind === 'paddle') {
-      const aim = clamp((ball.x - this.paddleX) / (this.paddleWidth / 2), -1, 1);
+      const aim = clamp((ball.x - paddleX) / (this.paddleWidth / 2), -1, 1);
       const direction = Math.sign(aim || ball.vx || 1);
       const angle = Math.max(0.13, Math.abs(aim) * 1.06) * direction;
       const speed = Math.min(MAX_SPEED, Math.hypot(ball.vx, ball.vy) + 4);
       ball.vx = Math.sin(angle) * speed;
       ball.vy = -Math.cos(angle) * speed;
+      ball.y = PADDLE_CONTACT_Y;
     } else if (contact.axis === 'x') {
       ball.vx *= -1;
     } else {

@@ -22,6 +22,57 @@ function sendBallOut(ball) {
   Object.assign(ball, { x: 8, y: HEIGHT + BALL_RADIUS - 1, vx: 0, vy: 400 });
 }
 
+test('a paddle arriving just after the ball crosses its top saves the ball', () => {
+  const game = startGame();
+  game.activateBuff('guards');
+  const [ball] = game.balls;
+  const contactY = PADDLE.y - BALL_RADIUS;
+  Object.assign(ball, { x: game.paddleX + PADDLE.width / 2 + BALL_RADIUS + 15, y: contactY - 1, vx: 0, vy: 420 });
+
+  game.update(0.008, { direction: 1 });
+  assert(ball.y > contactY);
+  assert(ball.vy > 0);
+  game.update(0.02, { direction: 1 });
+
+  assert(ball.vy < 0);
+  assert(ball.y < contactY);
+  assert.equal(game.lives, LIVES);
+  assert.equal(game.guards.length, 3);
+});
+
+test('a moving paddle can still catch a ball it overlaps at the start of a step', () => {
+  const game = startGame();
+  const [ball] = game.balls;
+  Object.assign(ball, {
+    x: game.paddleX + PADDLE.width / 2 + BALL_RADIUS - 1,
+    y: PADDLE.y - BALL_RADIUS - 0.2,
+    vx: 0,
+    vy: 400,
+  });
+
+  game.update(1 / 120, { direction: -1 });
+  assert(ball.vy < 0);
+});
+
+test('paddle grace ends when too much time or distance has passed', () => {
+  const cases = [
+    { vy: 150, delay: 0.06 }, // Beyond the time limit while still within reach vertically.
+    { vy: 570, delay: 0.038 }, // Beyond the depth limit while still within the time window.
+  ];
+  for (const { vy, delay } of cases) {
+    const game = startGame();
+    const [ball] = game.balls;
+    Object.assign(ball, { x: 600, y: PADDLE.y - BALL_RADIUS - 1, vx: 0, vy });
+
+    game.update(delay);
+    game.movePaddle(ball.x);
+    game.update(0.45);
+
+    assert.equal(game.lives, LIVES - 1);
+    assert.equal(game.phase, 'serve');
+  }
+});
+
 test('an extra ball drops into play, and only losing all balls costs a life', () => {
   const game = startGame();
   const brick = game.bricks.find(({ kind }) => kind === 'extra-ball');
