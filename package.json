@@ -1,0 +1,16 @@
+{
+  "name": "arkanoid-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/site.mjs dev",
+    "build": "node scripts/site.mjs build",
+    "preview": "node scripts/site.mjs preview"
+  },
+  "dependencies": {
+    "@fontsource/archivo-black": "^5.2.8",
+    "@fontsource/space-mono": "^5.2.10",
+    "pixi.js": "^8.23.0"
+  }
+}
