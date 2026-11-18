@@ -324,6 +324,22 @@ async function init() {
   const rightKeys = ['ArrowRight', 'KeyD'];
 
   function renderPlayfield() {
+    for (const [brick, view] of brickViews) {
+      if (!brick.active || brick.detonatesAt === undefined) continue;
+      if (reducedMotion.matches) {
+        view.tint = 0xffffff;
+        continue;
+      }
+
+      const progress = 1 - (brick.detonatesAt - game.playTime) / TNT.delay;
+      // As the fuse burns down, each pulse takes less time than the previous one.
+      const cycles = progress * (1.2 + 1.8 * progress);
+      const dim = (1 - Math.cos(cycles * 2 * Math.PI)) / 2;
+      const green = Math.round(255 - 110 * dim);
+      const blue = Math.round(255 - 145 * dim);
+      view.tint = 0xff0000 | (green << 8) | blue;
+    }
+
     paddle.position.set(game.paddleX, PADDLE.y);
     paddle.scale.x = game.paddleWidth / PADDLE.width;
     leftCannon.visible = rightCannon.visible = game.effectTimeLeft('cannons') > 0;
