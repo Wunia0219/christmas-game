@@ -5,8 +5,9 @@ export const BALL_RADIUS = 7;
 export const PADDLE = { width: 112, height: 13, y: 447 };
 export const DROP_RADIUS = 11;
 export const GUARD = { y: 470, width: 210, height: 8 };
+export const CANNON = { inset: 9, muzzleY: PADDLE.y - 12, shotRadius: 3 };
 export const BUFF_DURATION = 12;
-export const BUFFS = ['wide', 'fast', 'guards'];
+export const BUFFS = ['wide', 'fast', 'guards', 'cannons'];
 
 const layouts = [
   [
@@ -42,6 +43,7 @@ const PADDLE_CONTACT_Y = PADDLE.y - BALL_RADIUS;
 const PADDLE_GRACE_TIME = 0.045;
 const PADDLE_GRACE_DEPTH = 18;
 const DROP_SPEED = 145;
+const SHOT_SPEED = 760;
 const MAX_STEP = 1 / 120;
 const SEPARATION = 0.01;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -62,19 +64,20 @@ function makeBricks(level) {
   });
 }
 
-function brickContact(ball, brick) {
-  // Expand the rectangle so the ball can be swept through it as a point.
-  const left = brick.x - BALL_RADIUS;
-  const right = brick.x + brick.width + BALL_RADIUS;
-  const top = brick.y - BALL_RADIUS;
-  const bottom = brick.y + brick.height + BALL_RADIUS;
-  if (ball.vx === 0 && (ball.x < left || ball.x > right)) return null;
-  if (ball.vy === 0 && (ball.y < top || ball.y > bottom)) return null;
+function brickContact(projectile, brick, radius = BALL_RADIUS) {
+  // Expand the rectangle so the projectile can be swept through it as a point.
+  const left = brick.x - radius;
+  const right = brick.x + brick.width + radius;
+  const top = brick.y - radius;
+  const bottom = brick.y + brick.height + radius;
+  const { x, y, vx, vy } = projectile;
+  if (vx === 0 && (x < left || x > right)) return null;
+  if (vy === 0 && (y < top || y > bottom)) return null;
 
-  const enterX = ball.vx === 0 ? -Infinity : ((ball.vx > 0 ? left : right) - ball.x) / ball.vx;
-  const leaveX = ball.vx === 0 ? Infinity : ((ball.vx > 0 ? right : left) - ball.x) / ball.vx;
-  const enterY = ball.vy === 0 ? -Infinity : ((ball.vy > 0 ? top : bottom) - ball.y) / ball.vy;
-  const leaveY = ball.vy === 0 ? Infinity : ((ball.vy > 0 ? bottom : top) - ball.y) / ball.vy;
+  const enterX = vx === 0 ? -Infinity : ((vx > 0 ? left : right) - x) / vx;
+  const leaveX = vx === 0 ? Infinity : ((vx > 0 ? right : left) - x) / vx;
+  const enterY = vy === 0 ? -Infinity : ((vy > 0 ? top : bottom) - y) / vy;
+  const leaveY = vy === 0 ? Infinity : ((vy > 0 ? bottom : top) - y) / vy;
   const time = Math.max(enterX, enterY);
 
   if (time < 0 || time > Math.min(leaveX, leaveY)) return null;
@@ -115,6 +118,7 @@ export class Game {
     this.remaining = this.bricks.length;
     this.playTime = 0;
     this.clearPowerUps();
+    this.paddleX = WIDTH / 2;
     this.stageBall();
     this.phase = phase;
   }
@@ -123,10 +127,10 @@ export class Game {
     this.effects = {};
     this.drops = [];
     this.guards = [];
+    this.shots = [];
   }
 
   stageBall() {
-    this.paddleX = WIDTH / 2;
     this.balls = [{ x: this.paddleX, y: PADDLE.y - BALL_RADIUS - 4, vx: 0, vy: 0 }];
   }
 
@@ -236,7 +240,8 @@ export class Game {
     this.movePaddle(this.paddleX + offset);
     const paddleVelocity = (this.paddleX - paddleStartX) / seconds;
 
-    // A ball released during this step starts moving on the next step.
+    // Newly released balls and shots start moving on the next step.
+    const shotCount = this.shots.length;
     for (let index = this.balls.length - 1; index >= 0; index -= 1) {
       if (!this.updateBall(this.balls[index], seconds, paddleStartX, paddleVelocity)) this.balls.splice(index, 1);
       if (this.phase !== 'playing') return;
@@ -251,7 +256,28 @@ export class Game {
       return;
     }
 
-    this.updateDrops(seconds);
+    this.updateShots(seconds, shotCount);
+    if (this.phase === 'playing') this.updateDrops(seconds);
+  }
+
+  updateShots(seconds, shotCount) {
+    for (let index = shotCount - 1; index >= 0; index -= 1) {
+      const shot = this.shots[index];
+      let closest = null;
+      for (const brick of this.bricks) {
+        if (!brick.active) continue;
+        const contact = brickContact(shot, brick, CANNON.shotRadius);
+        if (contact && contact.time <= seconds && (!closest || contact.time < closest.time)) closest = contact;
+      }
+      if (closest) {
+        this.shots.splice(index, 1);
+        this.hitBrick(closest.brick);
+        if (this.phase !== 'playing') return;
+      } else {
+        shot.y += shot.vy * seconds;
+        if (shot.y < -CANNON.shotRadius) this.shots.splice(index, 1);
+      }
+    }
   }
 
   updateDrops(seconds) {
@@ -302,6 +328,12 @@ export class Game {
       ball.vx = Math.sin(angle) * speed;
       ball.vy = -Math.cos(angle) * speed;
       ball.y = PADDLE_CONTACT_Y;
+      if (this.effectTimeLeft('cannons') > 0) {
+        const offset = this.paddleWidth / 2 - CANNON.inset;
+        for (const x of [paddleX - offset, paddleX + offset]) {
+          this.shots.push({ x, y: CANNON.muzzleY - CANNON.shotRadius, vx: 0, vy: -SHOT_SPEED });
+        }
+      }
     } else if (contact.axis === 'x') {
       ball.vx *= -1;
     } else {
@@ -313,35 +345,39 @@ export class Game {
     else ball.y += Math.sign(ball.vy) * SEPARATION;
 
     if (contact.kind === 'brick') {
-      const { brick } = contact;
-      brick.active = false;
-      this.score += brick.points;
-      this.remaining -= 1;
-      if (this.remaining === 0) {
-        this.phase = this.level < LEVELS ? 'level-clear' : 'won';
-        this.balls = [];
-        this.clearPowerUps();
-        this.onEvent('clear', brick);
-        return;
-      }
-
-      const x = brick.x + brick.width / 2;
-      const y = brick.y + brick.height / 2;
-      if (brick.kind === 'extra-ball') {
-        const vx = (x < WIDTH / 2 ? 1 : -1) * 105;
-        this.balls.push({ x, y, vx, vy: 310, bonus: true });
-        this.onEvent('extra-ball', brick);
-      } else {
-        if (brick.kind === 'buff') this.drops.push({ x, y });
-        this.onEvent('brick', brick);
-      }
+      this.hitBrick(contact.brick);
       return;
     }
-
     if (contact.kind === 'guard') {
       this.guards.splice(this.guards.indexOf(contact.guard), 1);
       if (this.guards.length === 0) delete this.effects.guards;
     }
     this.onEvent(contact.kind);
+  }
+
+  hitBrick(brick) {
+    brick.active = false;
+    this.score += brick.points;
+    this.remaining -= 1;
+    if (this.remaining === 0) {
+      this.phase = this.level < LEVELS ? 'level-clear' : 'won';
+      this.balls = [];
+      this.clearPowerUps();
+      this.onEvent('clear', brick);
+      return;
+    }
+
+    const x = brick.x + brick.width / 2;
+    const y = brick.y + brick.height / 2;
+    if (brick.kind === 'extra-ball') {
+      const direction = x < WIDTH / 2 ? 1 : -1;
+      for (const [offset, speed] of [[-15, -125], [0, 75], [15, 185]]) {
+        this.balls.push({ x: x + offset * direction, y, vx: speed * direction, vy: 310, bonus: true });
+      }
+      this.onEvent('extra-ball', brick);
+      return;
+    }
+    if (brick.kind === 'buff') this.drops.push({ x, y });
+    this.onEvent('brick', brick);
   }
 }

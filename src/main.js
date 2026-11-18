@@ -1,5 +1,5 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import { BALL_RADIUS, BUFFS, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, PADDLE, WIDTH } from './game.js';
+import { BALL_RADIUS, BUFFS, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, PADDLE, WIDTH } from './game.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -29,7 +29,7 @@ const hues = [0xfd798f, 0xffa069, 0xffd86b, 0x70dfcd, 0xa895ff];
 const shadows = [0xb04369, 0xb85840, 0xb88947, 0x358b86, 0x6d52b5];
 const powerColors = { 'extra-ball': 0x8ef0ed, buff: 0xffa6d1 };
 const powerShadows = { 'extra-ball': 0x398985, buff: 0xaa397b };
-const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護' };
+const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護', cannons: '雙側砲台' };
 const dark = 0x252142;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const number = (value, digits) => String(value).padStart(digits, '0');
@@ -88,7 +88,7 @@ function playSound(event) {
 
 function drawPowerMark(graphic, kind, x, y) {
   if (kind === 'extra-ball') {
-    graphic.circle(x - 5, y, 3).fill(dark).circle(x + 5, y, 3).fill(dark);
+    graphic.circle(x - 8, y, 2.5).circle(x, y, 2.5).circle(x + 8, y, 2.5).fill(dark);
     return;
   }
   graphic.moveTo(x - 3, y - 3).lineTo(x - 2, y - 5).lineTo(x + 2, y - 5)
@@ -130,9 +130,16 @@ async function init() {
     .roundRect(-PADDLE.width / 2, 0, PADDLE.width, PADDLE.height, 4).fill(0x9179ec)
     .roundRect(-PADDLE.width / 2, 0, PADDLE.width, PADDLE.height - 4, 4).fill(0xdaceff)
     .rect(-PADDLE.width / 2 + 9, 2, PADDLE.width - 18, 2).fill(0xf4eeff);
+  const leftCannon = new Graphics()
+    .roundRect(-5, 0, 10, 16, 2).fill(0x0c091b)
+    .roundRect(-3, 1, 6, 12, 1).fill(0xffa6d1)
+    .rect(-2, 1, 4, 3).fill(0xffecf7)
+    .roundRect(-8, 9, 16, 8, 2).fill(0xaa397b)
+    .roundRect(-8, 9, 16, 5, 2).fill(0xffa6d1);
+  const rightCannon = leftCannon.clone();
   const balls = new Graphics();
   const powerUps = new Graphics();
-  app.stage.addChild(bricks, trail, particles, powerUps, paddle, balls);
+  app.stage.addChild(bricks, trail, particles, powerUps, paddle, leftCannon, rightCannon, balls);
 
   let brickViews = new Map();
   let sparks = [];
@@ -142,7 +149,7 @@ async function init() {
       announcement.textContent = `獲得${buffNames[payload]}。`;
       return;
     }
-    if (event === 'extra-ball') announcement.textContent = '額外球已釋放。';
+    if (event === 'extra-ball') announcement.textContent = '已釋放 3 顆額外球。';
     const brick = payload;
     if (brick) {
       brickViews.get(brick).visible = false;
@@ -263,6 +270,12 @@ async function init() {
   function renderPlayfield() {
     paddle.position.set(game.paddleX, PADDLE.y);
     paddle.scale.x = game.paddleWidth / PADDLE.width;
+    leftCannon.visible = rightCannon.visible = game.effectTimeLeft('cannons') > 0;
+    if (leftCannon.visible) {
+      const offset = game.paddleWidth / 2 - CANNON.inset;
+      leftCannon.position.set(game.paddleX - offset, CANNON.muzzleY);
+      rightCannon.position.set(game.paddleX + offset, CANNON.muzzleY);
+    }
     balls.clear();
     trail.clear();
     for (const { x, y, vx, vy, bonus } of game.balls) {
@@ -278,6 +291,11 @@ async function init() {
     }
 
     powerUps.clear();
+    for (const { x, y } of game.shots) {
+      const radius = CANNON.shotRadius;
+      powerUps.roundRect(x - radius, y - radius, radius * 2, 13, radius).fill(0xffa6d1)
+        .roundRect(x - 1, y - 2, 2, 7, 1).fill(0xffecf7);
+    }
     for (const { x, y } of game.drops) {
       const radius = DROP_RADIUS;
       powerUps.poly([x, y - radius, x + radius, y, x, y + radius, x - radius, y])
