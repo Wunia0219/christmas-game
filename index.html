@@ -31,6 +31,9 @@
             <span><i class="brick-mark hard-mark" aria-hidden="true">Ⅲ</i>硬磚需擊中 3 次</span>
             <span><i class="brick-mark invisible-mark" aria-hidden="true"></i>透明磚穿過後顯形</span>
             <span><i class="brick-mark tnt-mark" aria-hidden="true">TNT</i>擊中後延時爆炸</span>
+            <span><i class="brick-mark shrink-mark" aria-hidden="true">›‹</i>縮板磚掉落減益</span>
+            <span><i class="brick-mark shield-mark" aria-hidden="true"></i>護盾磚保護鄰磚</span>
+            <span><i class="brick-mark barrier-mark" aria-hidden="true">▪▪▪</i>攔截磚擋住向上攻擊</span>
           </div>
         </div>
         <div class="hero-art" aria-hidden="true">
@@ -87,13 +90,15 @@
               <div class="stat-row"><span class="stat-label" id="brick-label">剩餘磚塊</span><span class="figures" id="remaining">50</span></div>
               <progress id="progress" aria-labelledby="brick-label" max="50" value="50"></progress>
             </div>
-            <section class="buff-status" aria-label="限時強化">
-              <div class="buff-heading"><span class="stat-label">限時強化</span><span class="buff-idle" id="buff-idle">待收集</span></div>
+            <section class="buff-status" aria-label="限時效果">
+              <div class="buff-heading"><span class="stat-label">限時效果</span><span class="buff-idle" id="buff-idle">待收集</span></div>
               <ul class="buff-list" id="buff-list" hidden>
                 <li id="buff-wide" hidden><span>球拍加長</span><span class="buff-time"></span></li>
                 <li id="buff-fast" hidden><span>球拍加速</span><span class="buff-time"></span></li>
                 <li id="buff-guards" hidden><span>底線保護 <span id="guard-count"></span></span><span class="buff-time"></span></li>
                 <li id="buff-cannons" hidden><span>雙側砲台</span><span class="buff-time"></span></li>
+                <li id="buff-shrink" class="nerf-effect" hidden><span>球拍縮短</span><span class="buff-time"></span></li>
+                <li id="buff-barrier" class="nerf-effect" hidden><span>磚陣攔截</span><span class="buff-time"></span></li>
               </ul>
             </section>
           </section>

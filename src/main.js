@@ -1,5 +1,5 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import { BALL_RADIUS, BUFFS, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, PADDLE, TNT, WIDTH } from './game.js';
+import { BALL_RADIUS, BARRIER, BUFFS, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, PADDLE, TNT, WIDTH } from './game.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -19,7 +19,7 @@ const buffIdle = byId('buff-idle');
 const guardCount = byId('guard-count');
 const announcement = byId('announcement');
 const hearts = [...lives.children];
-const buffRows = BUFFS.map((kind) => {
+const effectRows = [...BUFFS, 'shrink', 'barrier'].map((kind) => {
   const row = byId(`buff-${kind}`);
   return { kind, row, timer: row.querySelector('.buff-time') };
 });
@@ -27,14 +27,32 @@ const buffRows = BUFFS.map((kind) => {
 const scoreKey = 'arkanoid.best';
 const hues = [0xfd798f, 0xffa069, 0xffd86b, 0x70dfcd, 0xa895ff];
 const shadows = [0xb04369, 0xb85840, 0xb88947, 0x358b86, 0x6d52b5];
-const powerColors = { 'extra-ball': 0x8ef0ed, buff: 0xffa6d1, hard: 0xd5def5, tnt: 0xff786d };
-const powerShadows = { 'extra-ball': 0x398985, buff: 0xaa397b, hard: 0x637492, tnt: 0xa2344d };
+const powerColors = {
+  'extra-ball': 0x8ef0ed, buff: 0xffa6d1, hard: 0xd5def5, tnt: 0xff786d,
+  shrink: 0xffaa82, shield: 0x8eafff, barrier: 0xd0a6fc,
+};
+const powerShadows = {
+  'extra-ball': 0x398985, buff: 0xaa397b, hard: 0x637492, tnt: 0xa2344d,
+  shrink: 0xa6504e, shield: 0x5266b5, barrier: 0x8052a3,
+};
+const shieldColor = 0xc1f0ff;
 const hardColors = [0xa5afc7, 0xbdcce9, powerColors.hard];
 const blastDuration = 0.28;
 const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護', cannons: '雙側砲台' };
 const dark = 0x252142;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const number = (value, digits) => String(value).padStart(digits, '0');
+
+function pulseStrength(progress) {
+  // The quadratic phase shortens each successive pulse.
+  const cycles = progress * (1.2 + 1.8 * progress);
+  return (1 - Math.cos(cycles * 2 * Math.PI)) / 2;
+}
+
+function expiryWarning(timeLeft) {
+  if (timeLeft <= 0 || timeLeft >= 1) return 0;
+  return reducedMotion.matches ? 0.65 : 0.75 * pulseStrength(1 - timeLeft);
+}
 
 const screens = {
   ready: { status: '準備就緒', title: '準備開打？', button: '開始遊戲' },
@@ -55,6 +73,10 @@ const tones = {
   'brick-reveal': [520, 780, 0.085],
   'tnt-armed': [390, 620, 0.13],
   'tnt-explode': [160, 55, 0.24],
+  'shield-break': [450, 275, 0.085],
+  'barrier-raise': [235, 345, 0.15],
+  'barrier-hit': [300, 200, 0.09],
+  shrink: [420, 240, 0.15],
   'extra-ball': [580, 1030, 0.15],
   buff: [750, 1250, 0.18],
   guard: [380, 690, 0.12],
@@ -76,8 +98,9 @@ let audio;
 let soundEnabled = false;
 
 function playSound(event) {
-  if (!soundEnabled || audio?.state !== 'running') return;
-  const [start, end, duration] = tones[event];
+  const effect = tones[event];
+  if (!effect || !soundEnabled || audio?.state !== 'running') return;
+  const [start, end, duration] = effect;
   const now = audio.currentTime;
   const tone = audio.createOscillator();
   const gain = audio.createGain();
@@ -97,6 +120,21 @@ function drawPowerMark(graphic, kind, x, y) {
     graphic.circle(x - 8, y, 2.5).circle(x, y, 2.5).circle(x + 8, y, 2.5).fill(dark);
     return;
   }
+  if (kind === 'shrink') {
+    graphic.moveTo(x - 8, y - 4).lineTo(x - 3, y).lineTo(x - 8, y + 4)
+      .moveTo(x + 8, y - 4).lineTo(x + 3, y).lineTo(x + 8, y + 4)
+      .stroke({ color: dark, width: 2, cap: 'round', join: 'round' });
+    return;
+  }
+  if (kind === 'shield') {
+    graphic.poly([x - 5, y - 4, x, y - 5, x + 5, y - 4, x + 4, y + 2, x, y + 6, x - 4, y + 2]).fill(dark);
+    return;
+  }
+  if (kind === 'barrier') {
+    for (const offset of [-7, 0, 7]) graphic.roundRect(x + offset - 2.5, y - 2, 5, 4, 1);
+    graphic.fill(dark);
+    return;
+  }
   graphic.moveTo(x - 3, y - 3).lineTo(x - 2, y - 5).lineTo(x + 2, y - 5)
     .lineTo(x + 4, y - 3).lineTo(x + 4, y - 1).lineTo(x, y + 1).lineTo(x, y + 2)
     .stroke({ color: dark, width: 2, cap: 'round', join: 'round' })
@@ -104,7 +142,7 @@ function drawPowerMark(graphic, kind, x, y) {
 }
 
 function drawBrick(brick, graphic = new Graphics()) {
-  const { width, height, row, kind } = brick;
+  const { width, height, kind } = brick;
   graphic.clear();
   graphic.position.set(brick.x, brick.y);
   graphic.visible = brick.active;
@@ -118,9 +156,21 @@ function drawBrick(brick, graphic = new Graphics()) {
     for (const x of [1.5, width - 1.5]) {
       graphic.moveTo(x, 5).lineTo(x, 9).moveTo(x, height - 9).lineTo(x, height - 5);
     }
-    return graphic.stroke({ color: 0xe3d5ff, alpha: 0.85, width: 2.4, cap: 'round' });
+    graphic.stroke({ color: 0xe3d5ff, alpha: 0.85, width: 2.4, cap: 'round' });
+  } else {
+    drawSolidBrick(graphic, brick);
   }
 
+  if (brick.shielded) {
+    graphic.roundRect(0.5, 0.5, width - 1, height - 1, 4)
+      .stroke({ color: shieldColor, width: 2.5 })
+      .roundRect(width - 8, 6, 5, 10, 2).fill(shieldColor);
+  }
+  return graphic;
+}
+
+function drawSolidBrick(graphic, brick) {
+  const { width, height, row, kind } = brick;
   let color = powerColors[kind] ?? hues[row];
   if (kind === 'hard') color = hardColors[brick.hitsLeft - 1];
   const armed = kind === 'tnt' && brick.detonatesAt !== undefined;
@@ -152,7 +202,6 @@ function drawBrick(brick, graphic = new Graphics()) {
   } else if (kind !== 'standard') {
     drawPowerMark(graphic, kind, x, y);
   }
-  return graphic;
 }
 
 async function init() {
@@ -195,6 +244,8 @@ async function init() {
       announcement.textContent = `獲得${buffNames[payload]}。`;
       return;
     }
+    if (event === 'shrink') announcement.textContent = '球拍縮短。';
+    if (event === 'barrier-raise') announcement.textContent = '磚陣下方出現攔截平台。';
     if (event === 'tnt-explode') {
       blasts.push({ ...payload, life: blastDuration });
       return;
@@ -243,7 +294,7 @@ async function init() {
       guardCount.textContent = `${displayedGuardCount} 個`;
     }
     let active = false;
-    for (const { kind, row, timer } of buffRows) {
+    for (const { kind, row, timer } of effectRows) {
       const seconds = Math.ceil(game.effectTimeLeft(kind));
       row.hidden = seconds === 0;
       if (row.hidden) continue;
@@ -332,9 +383,7 @@ async function init() {
       }
 
       const progress = 1 - (brick.detonatesAt - game.playTime) / TNT.delay;
-      // As the fuse burns down, each pulse takes less time than the previous one.
-      const cycles = progress * (1.2 + 1.8 * progress);
-      const dim = (1 - Math.cos(cycles * 2 * Math.PI)) / 2;
+      const dim = pulseStrength(progress);
       const green = Math.round(255 - 110 * dim);
       const blue = Math.round(255 - 145 * dim);
       view.tint = 0xff0000 | (green << 8) | blue;
@@ -368,16 +417,31 @@ async function init() {
       powerUps.roundRect(x - radius, y - radius, radius * 2, 13, radius).fill(0xffa6d1)
         .roundRect(x - 1, y - 2, 2, 7, 1).fill(0xffecf7);
     }
-    for (const { x, y } of game.drops) {
+    for (const { x, y, kind = 'buff' } of game.drops) {
       const radius = DROP_RADIUS;
       powerUps.poly([x, y - radius, x + radius, y, x, y + radius, x - radius, y])
-        .fill(powerColors.buff).stroke({ color: 0xffdcf5, width: 1.5 });
-      drawPowerMark(powerUps, 'buff', x, y);
+        .fill(powerColors[kind]).stroke({ color: kind === 'shrink' ? 0xfff2e5 : 0xffdcf5, width: 1.5 });
+      drawPowerMark(powerUps, kind, x, y);
     }
+    const guardWarning = expiryWarning(game.effectTimeLeft('guards'));
     for (const { x } of game.guards) {
       const left = x - GUARD.width / 2;
       powerUps.roundRect(left, GUARD.y, GUARD.width, GUARD.height, 3).fill(powerShadows['extra-ball'])
         .roundRect(left, GUARD.y, GUARD.width, GUARD.height - 3, 3).fill(powerColors['extra-ball']);
+      if (guardWarning > 0) {
+        powerUps.roundRect(left, GUARD.y, GUARD.width, GUARD.height - 3, 3)
+          .fill({ color: 0xfff6dc, alpha: guardWarning });
+      }
+    }
+    const barrierWarning = expiryWarning(game.effectTimeLeft('barrier'));
+    for (const { x } of game.barriers) {
+      const width = BARRIER.width - 4;
+      powerUps.roundRect(x + 2, BARRIER.y, width, BARRIER.height, 3).fill(powerShadows.barrier)
+        .roundRect(x + 2, BARRIER.y + 3, width, BARRIER.height - 3, 3).fill(powerColors.barrier);
+      if (barrierWarning > 0) {
+        powerUps.roundRect(x + 2, BARRIER.y + 3, width, BARRIER.height - 3, 3)
+          .fill({ color: 0xfff6dc, alpha: barrierWarning });
+      }
     }
   }
 

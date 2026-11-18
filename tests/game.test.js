@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BALL_RADIUS, BUFFS, BUFF_DURATION, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, LIVES, PADDLE, TNT } from '../src/game.js';
+import { BALL_RADIUS, BARRIER, BUFFS, BUFF_DURATION, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, LIVES, PADDLE, SHRINK_DURATION, TNT, WIDTH } from '../src/game.js';
 
 function startGame() {
   const game = new Game(() => {});
@@ -142,6 +142,39 @@ test('buff drops descend vertically and must be caught by the paddle', (context)
   game.update(0.45);
   assert.equal(game.drops.length, 0);
   assert.equal(random.mock.callCount(), 1);
+});
+
+test('buff and nerf drops can be caught just after passing the paddle top', (context) => {
+  context.mock.method(Math, 'random', () => 0);
+  const catchY = PADDLE.y - DROP_RADIUS;
+  for (const [kind, effect] of [['buff', 'wide'], ['shrink', 'shrink']]) {
+    const game = startGame();
+    const drop = { x: game.paddleX + PADDLE.width / 2 + DROP_RADIUS + 12, y: catchY - 1, kind };
+    game.drops.push(drop);
+    game.update(0.012);
+    assert(drop.y > catchY);
+    assert.equal(game.effectTimeLeft(effect), 0);
+
+    game.update(0.025, { direction: 1 });
+    assert.equal(game.drops.length, 0);
+    assert(game.effectTimeLeft(effect) > 0);
+  }
+});
+
+test('buff and nerf drops are missed if the paddle arrives after the grace window', (context) => {
+  const random = context.mock.method(Math, 'random', () => 0);
+  for (const kind of ['buff', 'shrink']) {
+    const game = startGame();
+    const drop = { x: game.paddleX + PADDLE.width, y: PADDLE.y - DROP_RADIUS - 1, kind };
+    game.drops.push(drop);
+    game.update(0.06);
+    game.movePaddle(drop.x);
+    game.update(0.01);
+    assert.deepEqual(game.drops, [drop]);
+    assert.equal(game.effectTimeLeft('wide'), 0);
+    assert.equal(game.effectTimeLeft('shrink'), 0);
+  }
+  assert.equal(random.mock.callCount(), 0);
 });
 
 test('a caught cannon buff fires from both ends only when the paddle bounces a ball', (context) => {
@@ -308,6 +341,105 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
   assert.equal(events.filter((event) => event === 'tnt-explode').length, 2);
 });
 
+test('the shrink drop can be dodged and temporarily reduces the current paddle width by a quarter', () => {
+  const game = startGame();
+  const brick = game.bricks.find(({ kind }) => kind === 'shrink');
+  hitBrick(game, brick);
+  assert.equal(game.score, brick.points);
+  assert.equal(game.paddleWidth, PADDLE.width);
+  const [drop] = game.drops;
+  assert.equal(drop.kind, 'shrink');
+  Object.assign(game.balls[0], { vx: 0, vy: 0 });
+  const catchY = PADDLE.y - DROP_RADIUS - 1;
+  game.movePaddle(0);
+  drop.y = catchY;
+  game.update(0.4);
+  assert.equal(game.drops.length, 0);
+  assert.equal(game.effectTimeLeft('shrink'), 0);
+
+  game.activateBuff('wide');
+  const wideWidth = game.paddleWidth;
+  game.movePaddle(drop.x);
+  game.drops.push({ ...drop, y: catchY });
+  game.update(1 / 120);
+  assert.equal(game.paddleWidth, wideWidth * 0.75);
+  assert.equal(game.effectTimeLeft('shrink'), SHRINK_DURATION);
+  game.update(SHRINK_DURATION + 0.01);
+  assert.equal(game.paddleWidth, wideWidth);
+});
+
+test('a shield brick adds up to two permanent one-hit shields with no scoring bonus', () => {
+  const game = startGame();
+  const brick = game.bricks.find(({ kind }) => kind === 'shield');
+  hitBrick(game, brick);
+  const targets = game.bricks.filter(({ shielded }) => shielded);
+  assert.equal(targets.length, 2);
+  assert(targets.every(({ x, y }) => Math.abs(x - brick.x) <= 73 && Math.abs(y - brick.y) <= 31));
+  assert.equal(game.score, brick.points);
+  const count = game.remaining;
+
+  sendBallOut(game.balls[0]);
+  game.update(0.01);
+  assert(targets.every(({ shielded }) => shielded));
+  game.action();
+  Object.assign(game.balls[0], { vx: 0, vy: 0 });
+  game.update(BUFF_DURATION + 1);
+  assert(targets.every(({ shielded }) => shielded));
+
+  const target = targets.find(({ kind }) => kind === 'standard');
+  hitBrick(game, target);
+  assert(game.balls[0].vy > 0);
+  assert(target.active && !target.shielded);
+  assert.equal(game.remaining, count);
+  assert.equal(game.score, brick.points);
+  hitBrick(game, target);
+  assert.equal(target.active, false);
+  assert.equal(game.score, brick.points + target.points);
+});
+
+test('each raised barrier segment stops one upward attack without scoring or blocking falling balls', () => {
+  const game = startGame();
+  const brick = game.bricks.find(({ kind }) => kind === 'barrier');
+  hitBrick(game, brick);
+  assert.equal(game.barriers.length, 3);
+  const score = game.score;
+  const count = game.remaining;
+  const [ball] = game.balls;
+  const left = BARRIER.width / 2;
+  Object.assign(ball, { x: left, y: BARRIER.y - 9, vx: 0, vy: 450 });
+  game.update(0.075);
+  assert(ball.y > BARRIER.y + BARRIER.height && ball.vy > 0);
+  assert.equal(game.barriers.length, 3);
+
+  const underBarrier = BARRIER.y + BARRIER.height + BALL_RADIUS + 1;
+  Object.assign(ball, { x: left, y: underBarrier, vy: -450 });
+  game.update(1 / 120);
+  assert(ball.vy > 0);
+  assert.equal(game.barriers.length, 2);
+
+  Object.assign(ball, { y: underBarrier, vy: -450 });
+  game.update(1 / 120);
+  assert(ball.vy < 0);
+  assert.equal(game.barriers.length, 2);
+
+  Object.assign(ball, { vx: 0, vy: 0 });
+  game.shots.push({ x: WIDTH / 2, y: underBarrier, vx: 0, vy: -760 });
+  game.update(0.02);
+  assert.equal(game.shots.length, 0);
+  assert.deepEqual(game.barriers.map(({ x }) => x), [BARRIER.width * 2]);
+  assert.equal(game.score, score);
+  assert.equal(game.remaining, count);
+
+  const timeLeft = game.effectTimeLeft('barrier');
+  game.togglePause();
+  game.update(BARRIER.duration);
+  assert.equal(game.effectTimeLeft('barrier'), timeLeft);
+  game.togglePause();
+  game.update(timeLeft + 0.01);
+  assert.equal(game.effectTimeLeft('barrier'), 0);
+  assert.equal(game.barriers.length, 0);
+});
+
 test('timed buffs coexist, refresh, freeze on pause, and expire in play', () => {
   const game = startGame();
   game.balls[0].vx = 0;
@@ -366,15 +498,18 @@ test('losing the last ball, advancing a level, and restarting clear temporary ef
 
   for (let level = 1; level <= LEVELS; level += 1) {
     game.activateBuff('guards');
+    const expectedScore = game.score + game.bricks.reduce((sum, brick) => sum + brick.points, 0);
     for (const brick of [...game.bricks].reverse()) {
-      const hits = brick.kind === 'invisible' ? 2 : brick.hitsLeft;
+      const hits = (brick.kind === 'invisible' ? 2 : brick.hitsLeft) + Number(Boolean(brick.shielded));
       for (let index = 0; index < hits && brick.active; index += 1) hitBrick(game, brick);
     }
     for (const ball of game.balls) Object.assign(ball, { vx: 0, vy: 0 });
     game.update(TNT.delay + 0.01);
     assert.equal(game.remaining, 0);
+    assert.equal(game.score, expectedScore);
     assert.equal(game.phase, level < LEVELS ? 'level-clear' : 'won');
     assert.equal(game.guards.length, 0);
+    assert.equal(game.barriers.length, 0);
     assert.equal(game.drops.length, 0);
     assert.equal(game.balls.length, 0);
     if (level < LEVELS) game.action();

@@ -5,9 +5,11 @@ export const BALL_RADIUS = 7;
 export const PADDLE = { width: 112, height: 13, y: 447 };
 export const DROP_RADIUS = 11;
 export const GUARD = { y: 470, width: 210, height: 8 };
+export const BARRIER = { y: 230, width: WIDTH / 3, height: 9, duration: 6 };
 export const CANNON = { inset: 9, muzzleY: PADDLE.y - 12, shotRadius: 3 };
 export const TNT = { delay: 0.75, radius: 47 };
 export const BUFF_DURATION = 12;
+export const SHRINK_DURATION = 5;
 export const BUFFS = ['wide', 'fast', 'guards', 'cannons'];
 
 const layouts = [
@@ -15,29 +17,32 @@ const layouts = [
     '###H###H##',
     '##?##I####',
     '#T#####B##',
-    '#B####H###',
-    '##I?##B#?T',
+    '#B##P#H###',
+    '##I?S#BW?T',
   ],
   [
     '....HH....',
     '...#I?#...',
-    '..#T#B##..',
+    '..#T#BPS..',
     '.#?#H##I#.',
-    '##B##?#TB#',
+    '##B#W?#TB#',
   ],
   [
-    '##H.HT.###',
+    '##H.HT.S##',
     '#.##B##I.#',
     '#B.T##?.##',
     '#.?#B#H#.#',
-    '#?#.I?.#B#',
+    '#?P.I?.WB#',
   ],
 ];
 
 export const LEVELS = layouts.length;
 
 const BRICK = { width: 65, height: 23, gap: 8, top: 36 };
-const BRICK_KINDS = { B: 'extra-ball', '?': 'buff', H: 'hard', I: 'invisible', T: 'tnt' };
+const BRICK_KINDS = {
+  B: 'extra-ball', '?': 'buff', H: 'hard', I: 'invisible', T: 'tnt',
+  S: 'shrink', P: 'shield', W: 'barrier',
+};
 const INITIAL_SPEED = 365;
 const MAX_SPEED = 585;
 const PADDLE_SPEED = 700;
@@ -87,15 +92,16 @@ function brickContact(projectile, brick, radius = BALL_RADIUS) {
   return { time, axis: enterX > enterY ? 'x' : 'y', brick, kind: 'brick' };
 }
 
-function paddleContactTime(ball, paddleX, paddleVelocity, reach) {
-  const crossing = (PADDLE_CONTACT_Y - ball.y) / ball.vy;
+function paddleContactTime({ x, y, vx, vy }, paddleX, paddleVelocity, paddleWidth, radius) {
+  const crossing = (PADDLE.y - radius - y) / vy;
   const start = Math.max(0, crossing);
   // Downward speed stays constant in this band, so depth also gives the time since crossing.
-  const end = crossing + Math.min(PADDLE_GRACE_TIME, PADDLE_GRACE_DEPTH / ball.vy);
+  const end = crossing + Math.min(PADDLE_GRACE_TIME, PADDLE_GRACE_DEPTH / vy);
   if (start > end) return null;
 
-  const relativeVelocity = ball.vx - paddleVelocity;
-  const separation = ball.x - paddleX + relativeVelocity * start;
+  const reach = paddleWidth / 2 + radius;
+  const relativeVelocity = vx - paddleVelocity;
+  const separation = x - paddleX + relativeVelocity * start;
   if (Math.abs(separation) <= reach) return start;
   if (separation * relativeVelocity >= 0) return null;
 
@@ -130,6 +136,7 @@ export class Game {
     this.effects = {};
     this.drops = [];
     this.guards = [];
+    this.barriers = [];
     this.shots = [];
   }
 
@@ -142,7 +149,8 @@ export class Game {
   }
 
   get paddleWidth() {
-    return PADDLE.width + (this.effectTimeLeft('wide') > 0 ? 64 : 0);
+    const width = PADDLE.width + (this.effectTimeLeft('wide') > 0 ? 64 : 0);
+    return this.effectTimeLeft('shrink') > 0 ? width * 0.75 : width;
   }
 
   get paddleSpeed() {
@@ -198,7 +206,7 @@ export class Game {
       consider({ time: (BALL_RADIUS - ball.y) / ball.vy, axis: 'y', kind: 'wall' });
     }
     if (ball.vy > 0) {
-      const time = paddleContactTime(ball, paddleX, paddleVelocity, this.paddleWidth / 2 + BALL_RADIUS);
+      const time = paddleContactTime(ball, paddleX, paddleVelocity, this.paddleWidth, BALL_RADIUS);
       if (time !== null) {
         consider({ time, axis: 'y', kind: 'paddle' });
       }
@@ -211,12 +219,20 @@ export class Game {
       }
       consider({ time: (HEIGHT + BALL_RADIUS - ball.y) / ball.vy, kind: 'miss' });
     }
-    consider(this.findBrickContact(ball, BALL_RADIUS, closest?.time ?? duration));
+    consider(this.findAttackContact(ball, BALL_RADIUS, closest?.time ?? duration));
     return closest;
   }
 
-  findBrickContact(projectile, radius, duration) {
+  findAttackContact(projectile, radius, duration) {
     let closest = null;
+    if (projectile.vy < 0 && this.barriers.length > 0) {
+      const time = (BARRIER.y + BARRIER.height + radius - projectile.y) / projectile.vy;
+      if (time >= 0 && time <= duration) {
+        const x = projectile.x + projectile.vx * time;
+        const barrier = this.barriers.find((segment) => x >= segment.x && x < segment.x + BARRIER.width);
+        if (barrier) closest = { time, axis: 'y', kind: 'barrier-hit', barrier };
+      }
+    }
     const concealed = [];
     for (const brick of this.bricks) {
       if (!brick.active) continue;
@@ -250,6 +266,7 @@ export class Game {
   updatePlay(seconds, direction, pointerX) {
     this.playTime += seconds;
     if (this.effectTimeLeft('guards') === 0) this.guards.length = 0;
+    if (this.effectTimeLeft('barrier') === 0) this.barriers.length = 0;
 
     const keyboardStep = this.paddleSpeed * seconds;
     const pointerStep = keyboardStep * 1.6;
@@ -271,7 +288,10 @@ export class Game {
       this.lives -= 1;
       this.phase = this.lives > 0 ? 'serve' : 'lost';
       this.clearPowerUps();
-      if (this.lives > 0) this.stageBall();
+      if (this.lives > 0) {
+        this.stageBall();
+        this.movePaddle(this.paddleX);
+      }
       this.onEvent('miss');
       return;
     }
@@ -279,16 +299,17 @@ export class Game {
     this.updateShots(seconds, shotCount);
     if (this.phase !== 'playing') return;
     this.updateTnt();
-    if (this.phase === 'playing') this.updateDrops(seconds);
+    if (this.phase === 'playing') this.updateDrops(seconds, paddleStartX, paddleVelocity);
   }
 
   updateShots(seconds, shotCount) {
     for (let index = shotCount - 1; index >= 0; index -= 1) {
       const shot = this.shots[index];
-      const contact = this.findBrickContact(shot, CANNON.shotRadius, seconds);
+      const contact = this.findAttackContact(shot, CANNON.shotRadius, seconds);
       if (contact) {
         this.shots.splice(index, 1);
-        this.hitBrick(contact.brick);
+        if (contact.kind === 'barrier-hit') this.breakBarrier(contact.barrier);
+        else this.hitBrick(contact.brick);
         if (this.phase !== 'playing') return;
       } else {
         shot.y += shot.vy * seconds;
@@ -317,15 +338,20 @@ export class Game {
     }
   }
 
-  updateDrops(seconds) {
-    const catchY = PADDLE.y - DROP_RADIUS;
+  updateDrops(seconds, paddleStartX, paddleVelocity) {
     for (let index = this.drops.length - 1; index >= 0; index -= 1) {
       const drop = this.drops[index];
-      const previousY = drop.y;
+      const falling = { x: drop.x, y: drop.y, vx: 0, vy: DROP_SPEED };
+      const time = paddleContactTime(falling, paddleStartX, paddleVelocity, this.paddleWidth, DROP_RADIUS);
       drop.y += DROP_SPEED * seconds;
-      if (previousY <= catchY && drop.y >= catchY && Math.abs(drop.x - this.paddleX) <= this.paddleWidth / 2 + DROP_RADIUS) {
+      if (time !== null && time <= seconds) {
         this.drops.splice(index, 1);
-        this.activateBuff(BUFFS[Math.floor(Math.random() * BUFFS.length)]);
+        if (drop.kind === 'shrink') {
+          this.effects.shrink = this.playTime + SHRINK_DURATION;
+          this.onEvent('shrink');
+        } else {
+          this.activateBuff(BUFFS[Math.floor(Math.random() * BUFFS.length)]);
+        }
       } else if (drop.y > HEIGHT + DROP_RADIUS) {
         this.drops.splice(index, 1);
       }
@@ -385,6 +411,10 @@ export class Game {
       this.hitBrick(contact.brick);
       return;
     }
+    if (contact.kind === 'barrier-hit') {
+      this.breakBarrier(contact.barrier);
+      return;
+    }
     if (contact.kind === 'guard') {
       this.guards.splice(this.guards.indexOf(contact.guard), 1);
       if (this.guards.length === 0) delete this.effects.guards;
@@ -393,9 +423,15 @@ export class Game {
   }
 
   hitBrick(brick) {
+    if (!brick.active) return;
     if (brick.kind === 'invisible') {
       brick.kind = 'standard';
       this.onEvent('brick-reveal', brick);
+      return;
+    }
+    if (brick.shielded) {
+      brick.shielded = false;
+      this.onEvent('shield-break', brick);
       return;
     }
     if (brick.kind === 'tnt') {
@@ -437,7 +473,31 @@ export class Game {
       this.onEvent('extra-ball', brick);
       return;
     }
-    if (brick.kind === 'buff') this.drops.push({ x, y });
+    if (brick.kind === 'buff' || brick.kind === 'shrink') this.drops.push({ x, y, kind: brick.kind });
+    if (brick.kind === 'shield') this.shieldAdjacentBricks(brick);
+    if (brick.kind === 'barrier') {
+      this.effects.barrier = this.playTime + BARRIER.duration;
+      this.barriers = [0, BARRIER.width, BARRIER.width * 2].map((left) => ({ x: left }));
+      this.onEvent('barrier-raise');
+    }
     this.onEvent('brick', brick);
+  }
+
+  shieldAdjacentBricks(source) {
+    const distance = (target) => Math.hypot(target.x - source.x, target.y - source.y);
+    const neighbors = this.bricks.filter((target) => target.active && !target.shielded && target.detonatesAt === undefined
+      && Math.abs(target.x - source.x) <= BRICK.width + BRICK.gap
+      && Math.abs(target.y - source.y) <= BRICK.height + BRICK.gap);
+    neighbors.sort((a, b) => distance(a) - distance(b));
+    for (const target of neighbors.slice(0, 2)) {
+      target.shielded = true;
+      this.onEvent('shield-raise', target);
+    }
+  }
+
+  breakBarrier(barrier) {
+    this.barriers.splice(this.barriers.indexOf(barrier), 1);
+    if (this.barriers.length === 0) delete this.effects.barrier;
+    this.onEvent('barrier-hit');
   }
 }
