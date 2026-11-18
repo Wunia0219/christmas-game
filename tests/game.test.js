@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BALL_RADIUS, BUFFS, BUFF_DURATION, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, LIVES, PADDLE } from '../src/game.js';
+import { BALL_RADIUS, BUFFS, BUFF_DURATION, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, LIVES, PADDLE, TNT } from '../src/game.js';
 
 function startGame() {
   const game = new Game(() => {});
@@ -218,6 +218,96 @@ test('each cannon shot stops at its first brick and triggers that brick’s effe
   assert.equal(game.effectTimeLeft('cannons'), 0);
 });
 
+test('hard bricks bounce the ball on each hit and score only when the third hit breaks them', () => {
+  const game = startGame();
+  const brick = game.bricks.find(({ kind }) => kind === 'hard');
+  const count = game.remaining;
+
+  for (const hitsLeft of [2, 1, 0]) {
+    hitBrick(game, brick);
+    assert(game.balls[0].vy > 0);
+    assert.equal(brick.hitsLeft, hitsLeft);
+    assert.equal(brick.active, hitsLeft > 0);
+    assert.equal(game.score, hitsLeft > 0 ? 0 : brick.points);
+    assert.equal(game.remaining, hitsLeft > 0 ? count : count - 1);
+  }
+});
+
+test('a ball passes through a concealed brick before it becomes a solid one-hit brick', () => {
+  const game = startGame();
+  const brick = game.bricks.findLast(({ kind }) => kind === 'invisible');
+  const count = game.remaining;
+  const [ball] = game.balls;
+  const boundary = brick.y + brick.height + BALL_RADIUS;
+  Object.assign(ball, { x: brick.x + brick.width / 2, y: boundary + 3.75, vx: 0, vy: -450 });
+  game.update(1 / 120);
+  assert.equal(ball.y, boundary);
+  assert.equal(brick.kind, 'invisible');
+
+  game.update(0.025);
+  assert(ball.y < boundary && ball.vy < 0);
+  assert.equal(brick.kind, 'standard');
+  assert(brick.active);
+  assert.equal(game.score, 0);
+  assert.equal(game.remaining, count);
+
+  hitBrick(game, brick);
+  assert(ball.vy > 0);
+  assert.equal(brick.active, false);
+  assert.equal(game.score, brick.points);
+});
+
+test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', () => {
+  const events = [];
+  const game = new Game((event) => events.push(event));
+  game.action();
+  const center = game.bricks.find(({ kind }) => kind === 'tnt');
+  const { x, y, width, height } = center;
+  const standard = { ...center, kind: 'standard', x: x - 73, y: y - 31 };
+  const hard = { ...center, kind: 'hard', hitsLeft: 3, x: x + 73 };
+  const invisible = { ...center, kind: 'invisible', x: x + 73, y: y + 31 };
+  const buff = { ...center, kind: 'buff', y: y + 31 };
+  const otherTnt = { ...center, y: y - 31 };
+  const distant = { ...center, kind: 'standard', y: y + 62 };
+  game.bricks = [center, standard, hard, invisible, buff, otherTnt, distant];
+  game.remaining = game.bricks.length;
+
+  const [ball] = game.balls;
+  Object.assign(ball, { x: x - BALL_RADIUS - 1, y: y + height / 2, vx: 450, vy: 0 });
+  game.update(1 / 120);
+  assert(ball.vx < 0);
+  assert(center.active);
+  assert.equal(game.score, 0);
+  const fuse = center.detonatesAt;
+  assert.equal(fuse, game.playTime + TNT.delay);
+  Object.assign(ball, { x: x + width / 2, y: PADDLE.y - 40, vx: 0, vy: 0 });
+  game.update(TNT.delay - 0.02);
+  game.hitBrick(center);
+  assert.equal(center.detonatesAt, fuse);
+  game.togglePause();
+  game.update(1);
+  assert(center.active && standard.active);
+
+  game.togglePause();
+  game.update(0.03);
+  assert.equal(center.active, false);
+  assert.equal(standard.active, false);
+  assert.equal(buff.active, false);
+  assert.equal(game.drops.length, 1);
+  assert.equal(hard.hitsLeft, 2);
+  assert.equal(invisible.kind, 'standard');
+  assert(invisible.active && distant.active && otherTnt.active);
+  assert(otherTnt.detonatesAt > game.playTime);
+  assert.equal(game.score, center.points + standard.points + buff.points);
+
+  game.update(TNT.delay);
+  assert.equal(otherTnt.active, false);
+  assert.equal(hard.hitsLeft, 1);
+  assert(invisible.active && distant.active);
+  assert.equal(game.remaining, 3);
+  assert.equal(events.filter((event) => event === 'tnt-explode').length, 2);
+});
+
 test('timed buffs coexist, refresh, freeze on pause, and expire in play', () => {
   const game = startGame();
   game.balls[0].vx = 0;
@@ -276,7 +366,12 @@ test('losing the last ball, advancing a level, and restarting clear temporary ef
 
   for (let level = 1; level <= LEVELS; level += 1) {
     game.activateBuff('guards');
-    for (const brick of [...game.bricks].reverse()) hitBrick(game, brick);
+    for (const brick of [...game.bricks].reverse()) {
+      const hits = brick.kind === 'invisible' ? 2 : brick.hitsLeft;
+      for (let index = 0; index < hits && brick.active; index += 1) hitBrick(game, brick);
+    }
+    for (const ball of game.balls) Object.assign(ball, { vx: 0, vy: 0 });
+    game.update(TNT.delay + 0.01);
     assert.equal(game.remaining, 0);
     assert.equal(game.phase, level < LEVELS ? 'level-clear' : 'won');
     assert.equal(game.guards.length, 0);

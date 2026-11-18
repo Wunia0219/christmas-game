@@ -1,5 +1,5 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import { BALL_RADIUS, BUFFS, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, PADDLE, WIDTH } from './game.js';
+import { BALL_RADIUS, BUFFS, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, PADDLE, TNT, WIDTH } from './game.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -27,8 +27,10 @@ const buffRows = BUFFS.map((kind) => {
 const scoreKey = 'arkanoid.best';
 const hues = [0xfd798f, 0xffa069, 0xffd86b, 0x70dfcd, 0xa895ff];
 const shadows = [0xb04369, 0xb85840, 0xb88947, 0x358b86, 0x6d52b5];
-const powerColors = { 'extra-ball': 0x8ef0ed, buff: 0xffa6d1 };
-const powerShadows = { 'extra-ball': 0x398985, buff: 0xaa397b };
+const powerColors = { 'extra-ball': 0x8ef0ed, buff: 0xffa6d1, hard: 0xd5def5, tnt: 0xff786d };
+const powerShadows = { 'extra-ball': 0x398985, buff: 0xaa397b, hard: 0x637492, tnt: 0xa2344d };
+const hardColors = [0xa5afc7, 0xbdcce9, powerColors.hard];
+const blastDuration = 0.28;
 const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護', cannons: '雙側砲台' };
 const dark = 0x252142;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -49,6 +51,10 @@ const tones = {
   wall: [190, 160, 0.045],
   paddle: [300, 400, 0.07],
   brick: [600, 900, 0.075],
+  'brick-damage': [250, 205, 0.075],
+  'brick-reveal': [520, 780, 0.085],
+  'tnt-armed': [390, 620, 0.13],
+  'tnt-explode': [160, 55, 0.24],
   'extra-ball': [580, 1030, 0.15],
   buff: [750, 1250, 0.18],
   guard: [380, 690, 0.12],
@@ -97,16 +103,55 @@ function drawPowerMark(graphic, kind, x, y) {
     .circle(x, y + 5, 1.15).fill(dark);
 }
 
-function drawBrick(brick) {
+function drawBrick(brick, graphic = new Graphics()) {
   const { width, height, row, kind } = brick;
-  const graphic = new Graphics()
+  graphic.clear();
+  graphic.position.set(brick.x, brick.y);
+  graphic.visible = brick.active;
+  if (!graphic.visible) return graphic;
+
+  if (kind === 'invisible') {
+    for (let x = 5; x + 7 <= width - 5; x += 12) {
+      graphic.moveTo(x, 1.5).lineTo(x + 7, 1.5)
+        .moveTo(x, height - 1.5).lineTo(x + 7, height - 1.5);
+    }
+    for (const x of [1.5, width - 1.5]) {
+      graphic.moveTo(x, 5).lineTo(x, 9).moveTo(x, height - 9).lineTo(x, height - 5);
+    }
+    return graphic.stroke({ color: 0xe3d5ff, alpha: 0.85, width: 2.4, cap: 'round' });
+  }
+
+  let color = powerColors[kind] ?? hues[row];
+  if (kind === 'hard') color = hardColors[brick.hitsLeft - 1];
+  const armed = kind === 'tnt' && brick.detonatesAt !== undefined;
+  if (armed) color = 0xffcf73;
+  graphic
     .roundRect(0, 3, width, height, 3).fill(0x0b0a1b)
     .roundRect(0, 0, width, height, 3).fill(powerShadows[kind] ?? shadows[row])
-    .roundRect(0, 0, width, height - 4, 3).fill(powerColors[kind] ?? hues[row])
+    .roundRect(0, 0, width, height - 4, 3).fill(color)
     .rect(4, 3, width - 8, 2).fill({ color: 0xffffff, alpha: 0.38 })
     .rect(4, 7, 2, 2).fill({ color: 0xffffff, alpha: 0.45 });
-  if (kind !== 'standard') drawPowerMark(graphic, kind, width / 2, (height - 4) / 2);
-  graphic.position.set(brick.x, brick.y);
+
+  const x = width / 2;
+  const y = (height - 4) / 2;
+  if (kind === 'hard') {
+    for (let index = 0; index < 3; index += 1) {
+      graphic.roundRect(x - 13 + index * 9, y - 1, 7, 5, 1.5)
+        .fill({ color: dark, alpha: index < brick.hitsLeft ? 1 : 0.22 });
+    }
+  } else if (kind === 'tnt') {
+    graphic.roundRect(x - 15, y - 4, 30, 12, 3).fill(dark);
+    for (const offset of [-8, 8]) {
+      const letterX = x + offset;
+      graphic.moveTo(letterX - 2, y - 1).lineTo(letterX + 2, y - 1)
+        .moveTo(letterX, y - 1).lineTo(letterX, y + 5);
+    }
+    graphic.moveTo(x - 2, y + 5).lineTo(x - 2, y - 1).lineTo(x + 2, y + 5).lineTo(x + 2, y - 1)
+      .stroke({ color: 0xfff4dd, width: 1.4, cap: 'round', join: 'round' });
+    if (armed) graphic.star(x + 22, y + 2, 4, 5, 1.6).fill(0xfff4dd);
+  } else if (kind !== 'standard') {
+    drawPowerMark(graphic, kind, x, y);
+  }
   return graphic;
 }
 
@@ -143,16 +188,26 @@ async function init() {
 
   let brickViews = new Map();
   let sparks = [];
+  let blasts = [];
   const game = new Game((event, payload) => {
     playSound(event);
     if (event === 'buff') {
       announcement.textContent = `獲得${buffNames[payload]}。`;
       return;
     }
+    if (event === 'tnt-explode') {
+      blasts.push({ ...payload, life: blastDuration });
+      return;
+    }
     if (event === 'extra-ball') announcement.textContent = '已釋放 3 顆額外球。';
     const brick = payload;
     if (brick) {
-      brickViews.get(brick).visible = false;
+      const view = brickViews.get(brick);
+      if (brick.active) {
+        drawBrick(brick, view);
+        return;
+      }
+      view.visible = false;
       if (!reducedMotion.matches) {
         for (let index = 0; index < 7; index += 1) {
           sparks.push({
@@ -207,6 +262,7 @@ async function init() {
       for (const old of bricks.removeChildren()) old.destroy();
       brickViews = new Map(game.bricks.map((brick) => [brick, bricks.addChild(drawBrick(brick))]));
       sparks = [];
+      blasts = [];
       displayedBricks = game.bricks;
       byId('level').textContent = number(game.level, 2);
       progress.max = game.bricks.length;
@@ -317,6 +373,16 @@ async function init() {
     renderPlayfield();
 
     particles.clear();
+    for (const blast of blasts) {
+      if (game.phase !== 'paused') blast.life -= seconds;
+      if (blast.life <= 0) continue;
+      const fade = blast.life / blastDuration;
+      const radius = reducedMotion.matches ? TNT.radius : TNT.radius * (1 - 0.55 * fade);
+      particles.circle(blast.x, blast.y, radius)
+        .fill({ color: 0xff985a, alpha: 0.22 * fade })
+        .stroke({ color: 0xffdf95, width: 3, alpha: fade });
+    }
+    blasts = blasts.filter(({ life }) => life > 0);
     if (game.phase === 'paused' || reducedMotion.matches) return;
     for (const spark of sparks) {
       spark.life -= seconds;

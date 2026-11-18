@@ -6,36 +6,38 @@ export const PADDLE = { width: 112, height: 13, y: 447 };
 export const DROP_RADIUS = 11;
 export const GUARD = { y: 470, width: 210, height: 8 };
 export const CANNON = { inset: 9, muzzleY: PADDLE.y - 12, shotRadius: 3 };
+export const TNT = { delay: 0.55, radius: 47 };
 export const BUFF_DURATION = 12;
 export const BUFFS = ['wide', 'fast', 'guards', 'cannons'];
 
 const layouts = [
   [
-    '##########',
-    '##?#######',
-    '#######B##',
-    '#B########',
-    '###?##B#?#',
+    '###H###H##',
+    '##?##I####',
+    '#T#####B##',
+    '#B####H###',
+    '##I?##B#?T',
   ],
   [
-    '....##....',
-    '...##?#...',
-    '..###B##..',
-    '.#?######.',
-    '##B##?##B#',
+    '....HH....',
+    '...#I?#...',
+    '..#T#B##..',
+    '.#?#H##I#.',
+    '##B##?#TB#',
   ],
   [
-    '###.##.###',
-    '#.##B###.#',
-    '#B.###?.##',
-    '#.?#B###.#',
-    '#?#.#?.#B#',
+    '##H.HT.###',
+    '#.##B##I.#',
+    '#B.T##?.##',
+    '#.?#B#H#.#',
+    '#?#.I?.#B#',
   ],
 ];
 
 export const LEVELS = layouts.length;
 
 const BRICK = { width: 65, height: 23, gap: 8, top: 36 };
+const BRICK_KINDS = { B: 'extra-ball', '?': 'buff', H: 'hard', I: 'invisible', T: 'tnt' };
 const INITIAL_SPEED = 365;
 const MAX_SPEED = 585;
 const PADDLE_SPEED = 700;
@@ -57,7 +59,8 @@ function makeBricks(level) {
       width: BRICK.width,
       height: BRICK.height,
       row: y,
-      kind: cell === 'B' ? 'extra-ball' : cell === '?' ? 'buff' : 'standard',
+      kind: BRICK_KINDS[cell] ?? 'standard',
+      hitsLeft: cell === 'H' ? 3 : 1,
       points: (5 - y) * 10,
       active: true,
     }] : []);
@@ -208,8 +211,25 @@ export class Game {
       }
       consider({ time: (HEIGHT + BALL_RADIUS - ball.y) / ball.vy, kind: 'miss' });
     }
+    consider(this.findBrickContact(ball, BALL_RADIUS, closest?.time ?? duration));
+    return closest;
+  }
+
+  findBrickContact(projectile, radius, duration) {
+    let closest = null;
+    const concealed = [];
     for (const brick of this.bricks) {
-      if (brick.active) consider(brickContact(ball, brick));
+      if (!brick.active) continue;
+      const contact = brickContact(projectile, brick, radius);
+      if (!contact || contact.time > duration) continue;
+      if (brick.kind === 'invisible') concealed.push(contact);
+      else if (!closest || contact.time < closest.time) closest = contact;
+    }
+
+    // Reveal only the bricks the projectile enters before its first solid contact.
+    const travelTime = closest?.time ?? duration;
+    for (const { brick, time } of concealed) {
+      if (time < travelTime) this.hitBrick(brick);
     }
     return closest;
   }
@@ -257,25 +277,42 @@ export class Game {
     }
 
     this.updateShots(seconds, shotCount);
+    if (this.phase !== 'playing') return;
+    this.updateTnt();
     if (this.phase === 'playing') this.updateDrops(seconds);
   }
 
   updateShots(seconds, shotCount) {
     for (let index = shotCount - 1; index >= 0; index -= 1) {
       const shot = this.shots[index];
-      let closest = null;
-      for (const brick of this.bricks) {
-        if (!brick.active) continue;
-        const contact = brickContact(shot, brick, CANNON.shotRadius);
-        if (contact && contact.time <= seconds && (!closest || contact.time < closest.time)) closest = contact;
-      }
-      if (closest) {
+      const contact = this.findBrickContact(shot, CANNON.shotRadius, seconds);
+      if (contact) {
         this.shots.splice(index, 1);
-        this.hitBrick(closest.brick);
+        this.hitBrick(contact.brick);
         if (this.phase !== 'playing') return;
       } else {
         shot.y += shot.vy * seconds;
         if (shot.y < -CANNON.shotRadius) this.shots.splice(index, 1);
+      }
+    }
+  }
+
+  updateTnt() {
+    for (const brick of this.bricks) {
+      if (!brick.active || brick.detonatesAt === undefined || brick.detonatesAt > this.playTime) continue;
+      const x = brick.x + brick.width / 2;
+      const y = brick.y + brick.height / 2;
+      this.onEvent('tnt-explode', { x, y });
+      this.destroyBrick(brick);
+      if (this.phase !== 'playing') return;
+
+      for (const target of this.bricks) {
+        if (!target.active) continue;
+        const dx = x - clamp(x, target.x, target.x + target.width);
+        const dy = y - clamp(y, target.y, target.y + target.height);
+        if (dx * dx + dy * dy > TNT.radius ** 2) continue;
+        this.hitBrick(target);
+        if (this.phase !== 'playing') return;
       }
     }
   }
@@ -356,6 +393,29 @@ export class Game {
   }
 
   hitBrick(brick) {
+    if (brick.kind === 'invisible') {
+      brick.kind = 'standard';
+      this.onEvent('brick-reveal', brick);
+      return;
+    }
+    if (brick.kind === 'tnt') {
+      if (brick.detonatesAt === undefined) {
+        brick.detonatesAt = this.playTime + TNT.delay;
+        this.onEvent('tnt-armed', brick);
+      }
+      return;
+    }
+    if (brick.kind === 'hard') {
+      brick.hitsLeft -= 1;
+      if (brick.hitsLeft > 0) {
+        this.onEvent('brick-damage', brick);
+        return;
+      }
+    }
+    this.destroyBrick(brick);
+  }
+
+  destroyBrick(brick) {
     brick.active = false;
     this.score += brick.points;
     this.remaining -= 1;
