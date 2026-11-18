@@ -6,7 +6,7 @@ export const PADDLE = { width: 112, height: 13, y: 447 };
 export const DROP_RADIUS = 11;
 export const GUARD = { y: 470, width: 210, height: 8 };
 export const CANNON = { inset: 9, muzzleY: PADDLE.y - 12, shotRadius: 3 };
-export const TNT = { delay: 0.55, radius: 47 };
+export const TNT = { delay: 0.75, radius: 47 };
 export const BUFF_DURATION = 12;
 export const BUFFS = ['wide', 'fast', 'guards', 'cannons'];
 
