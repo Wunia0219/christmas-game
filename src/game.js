@@ -1,5 +1,6 @@
 export const WIDTH = 800;
 export const HEIGHT = 480;
+export const BRICK = { width: 42, height: 16 };
 export const LIVES = 3;
 export const BALL_RADIUS = 7;
 export const PADDLE = { width: 112, height: 13, y: 447 };
@@ -12,72 +13,134 @@ export const BUFF_DURATION = 12;
 export const SHRINK_DURATION = 5;
 export const BUFFS = ['wide', 'fast', 'guards', 'cannons'];
 
+// Each position is [x, y, standardOnly].
 const giraffeLetters = [
-  ['.###.', '#...#', '#....', '#.###', '#...#', '#...#', '.###.'], // G
-  ['#',     '.',     '#',     '#',     '#',     '#',     '#'],     // i
-  ['....',  '....',  '###.',  '##..',  '#...',  '#...',  '#...'],  // r
-  ['.....', '.....', '.###.', '....#', '.####', '#...#', '.####'], // a
-  ['.###',  '#...',  '###.',  '#...',  '#...',  '#...',  '#...'],  // f
-  ['.###',  '#...',  '###.',  '#...',  '#...',  '#...',  '#...'],  // f
-  ['.....', '.....', '.###.', '#...#', '#####', '#....', '.####'], // e
+  [ // G
+    [21, 0], [65, 0], [7, 19], [83, 19], [0, 38], [0, 57], [0, 76],
+    [44, 76], [88, 76], [0, 95], [88, 95], [7, 114], [81, 114],
+    [21, 133], [65, 133],
+  ],
+  [ // i
+    [0, 21, true], [0, 57], [0, 76], [0, 95], [0, 114], [0, 133],
+  ],
+  [ // r
+    [3, 57], [47, 61, true], [0, 76], [0, 95], [0, 114], [0, 133],
+  ],
+  [ // a
+    [14, 57], [58, 57], [65, 76, true], [11, 95], [55, 95],
+    [0, 114], [65, 114], [8, 133], [65, 133],
+  ],
+  [ // f
+    [29, 0, true], [16, 19], [11, 38], [0, 57], [44, 57, true],
+    [11, 76], [11, 95], [11, 114], [11, 133],
+  ],
+  [ // f
+    [29, 0, true], [16, 19], [11, 38], [0, 57], [44, 57, true],
+    [11, 76], [11, 95], [11, 114], [11, 133],
+  ],
+  [ // e
+    [12, 57, true], [56, 57, true], [0, 76], [63, 76], [0, 95], [44, 95],
+    [0, 114], [12, 133], [56, 133],
+  ],
 ];
 
-const standardGrid = { width: 65, height: 23, gap: 8, top: 36 };
+const xmasLetters = [
+  [ // X
+    [0, 0, true], [106, 0, true], [10, 18], [96, 18],
+    [20, 36], [86, 36], [30, 54], [76, 54], [53, 72, true],
+    [30, 90], [76, 90], [20, 108], [86, 108], [10, 126], [96, 126],
+    [0, 144, true], [106, 144, true],
+  ],
+  [ // m
+    [23, 47, true], [92, 47, true],
+    [5, 66, true], [57, 66, true], [111, 66, true],
+    [0, 86], [57, 86], [116, 86], [0, 106], [57, 106], [116, 106],
+    [0, 125], [57, 125], [116, 125], [0, 144], [57, 144], [116, 144],
+  ],
+  [ // a
+    [13, 54], [57, 54, true], [65, 72, true], [10, 90], [54, 90],
+    [0, 108], [65, 108], [0, 126], [65, 126], [10, 144], [65, 144],
+  ],
+  [ // s
+    [15, 54, true], [59, 54, true], [3, 72], [13, 90], [57, 90],
+    [64, 108], [61, 126], [10, 144, true], [54, 144, true],
+  ],
+];
+
+const charityCharacters = [
+  [ // 十
+    [66, 0, true], [66, 18], [66, 36],
+    [0, 54, true], [44, 54, true], [88, 54, true], [132, 54, true],
+    [66, 72], [66, 90], [66, 108], [66, 126], [66, 144, true],
+  ],
+  [ // 方
+    [55, 0, true], [0, 36, true], [44, 36], [88, 36, true],
+    [43, 54], [43, 72], [87, 72, true], [31, 90], [90, 90],
+    [20, 108], [88, 108], [10, 126], [81, 126], [0, 144], [61, 144, true],
+  ],
+  [ // 五
+    [3, 0, true], [46, 0, true], [89, 0, true], [49, 18], [46, 36], [43, 54],
+    [0, 72, true], [43, 72, true], [90, 72, true], [43, 90], [90, 90, true],
+    [32, 108], [85, 108], [22, 126], [81, 126],
+    [0, 144, true], [45, 144, true], [90, 144, true],
+  ],
+  [ // 甲
+    [0, 0, true], [44, 0, true], [88, 0, true], [132, 0, true],
+    [0, 19], [66, 19], [132, 19], [0, 38], [66, 38], [132, 38],
+    [0, 57, true], [44, 57, true], [88, 57, true], [132, 57, true],
+    [0, 76], [66, 76], [132, 76], [0, 95], [66, 95], [132, 95],
+    [0, 114, true], [44, 114, true], [88, 114, true], [132, 114, true],
+    [66, 132, true], [66, 150, true],
+  ],
+];
+
+function centerSlots(slots) {
+  const left = Math.min(...slots.map(({ x }) => x));
+  const right = Math.max(...slots.map(({ x, width }) => x + width));
+  const offset = (WIDTH - left - right) / 2;
+  return slots.map((slot) => ({ ...slot, x: slot.x + offset }));
+}
+
+function wordSlots(letters, spacing, top) {
+  let left = 0;
+  const slots = letters.flatMap((positions, index) => {
+    const glyph = positions.map(([x, y, standardOnly]) => ({
+      x: left + x, y: top + y, ...BRICK, cell: index, standardOnly,
+    }));
+    const right = Math.max(...glyph.map(({ x, width }) => x + width));
+    left = right + (spacing[index] ?? 0);
+    return glyph;
+  });
+  return centerSlots(slots).sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
 const draftSpecials = 'BBB???HHHIITTSPW';
+const christmasRed = [0xff8b83, 0xb54960];
+const christmasGreen = [0x91dbad, 0x458568];
+const christmasGold = [0xffdc82, 0xb8893f];
+const skyBlue = [0x93caff, 0x527fbd];
 const layouts = [
   {
+    name: 'Xmas',
+    slots: wordSlots(xmasLetters, [24, 24, 24], 53),
+    specials: draftSpecials,
+    palette: [christmasRed, christmasGreen, christmasGold, christmasRed],
+  },
+  {
     name: 'Giraffe',
-    rows: giraffeLetters[0].map((_, row) => giraffeLetters
-      .map((letter, index) => letter[row].replaceAll('#', String(index))).join('.')),
-    grid: { width: 19, height: 20, gap: 3, top: 59 },
+    slots: wordSlots(giraffeLetters, [11, 10, 13, 13, 15, 13], 60),
     specials: draftSpecials,
     palette: [
       [0xff8b83, 0xb54960], [0xffad71, 0xb86146], [0xffca69, 0xb88740],
-      [0xffe17e, 0xb89146], [0x99e6bf, 0x488e7c], [0x93caff, 0x527fbd],
+      [0xffe17e, 0xb89146], [0x99e6bf, 0x488e7c], skyBlue,
       [0xc5adff, 0x7d60b5],
     ],
   },
   {
-    name: '小路吉祥物',
-    rows: [
-      '......H..H......',
-      '......Y..Y......',
-      '...YO.YYYYY.OY..',
-      '....YYYYYYYYY...',
-      '.....YYYYYYYY...',
-      '.....YEEYEEYYY..',
-      '.....YEPYEPYYYY.',
-      '......YYYYMMMMM.',
-      '......YYMMMMNMM.',
-      '......YYYYMMMM..',
-      '.......YSY......',
-      '......YYYS......',
-      '......YYSY......',
-      '...H..SYYS..YY..',
-      '...YYYYYSYYYH...',
-      '....YSYYYSY.....',
-      '.....YY.YYY.....',
-      '.....HH..HHH....',
-    ],
-    grid: { width: 19, height: 10, gap: 2, top: 14 },
-    specials: draftSpecials,
-    specialCells: 'Y',
-    palette: {
-      Y: [0xf8cb55, 0xb88237], O: [0xf0a064, 0xa6593d], S: [0xc47c43, 0x894832],
-      H: [0x815144, 0x492c32], E: [0xfff4e0, 0xd4b194], P: [0x573132, 0x382436],
-      M: [0xffdf92, 0xc99856], N: [0xb4774d, 0x7e493f],
-    },
-  },
-  {
-    name: '暫用磚陣',
-    rows: [
-      '##H.HT.S##',
-      '#.##B##I.#',
-      '#B.T##?.##',
-      '#.?#B#H#.#',
-      '#?P.I?.WB#',
-    ],
-    grid: standardGrid,
+    name: '十方　五甲',
+    slots: wordSlots(charityCharacters, [22, 54, 22], 53),
+    specials: 'BBBB????HHHIITTSPW',
+    palette: [christmasGold, christmasGold, skyBlue, skyBlue],
   },
 ];
 
@@ -96,40 +159,37 @@ const PADDLE_GRACE_TIME = 0.045;
 const PADDLE_GRACE_DEPTH = 18;
 const DROP_SPEED = 145;
 const SHOT_SPEED = 760;
+const SHIELD_NEIGHBOR_GAP = 8;
 const MAX_STEP = 1 / 120;
 const SEPARATION = 0.01;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 function makeBricks(level) {
-  const { rows, grid: { width, height, gap, top }, palette, specials, specialCells } = layouts[level - 1];
-  const cells = [...rows.join('')].filter((cell) => cell !== '.');
-  const canShuffle = (cell) => !specialCells || specialCells.includes(cell);
-  const shuffleCount = cells.filter(canShuffle).length;
-  const kinds = specials ? [...specials.padEnd(shuffleCount, '#')] : cells;
+  const { slots, palette, specials } = layouts[level - 1];
+  const shuffleCount = slots.filter(({ standardOnly }) => !standardOnly).length;
+  const kinds = [...specials.padEnd(shuffleCount, '#')];
   for (let index = kinds.length - 1; index > 0; index -= 1) {
     const other = Math.floor(Math.random() * (index + 1));
     [kinds[index], kinds[other]] = [kinds[other], kinds[index]];
   }
 
-  return rows.flatMap((row, y) => {
-    const left = (WIDTH - (row.length * (width + gap) - gap)) / 2;
-    return [...row].flatMap((cell, x) => {
-      if (cell === '.') return [];
-      const kind = canShuffle(cell) ? BRICK_KINDS[kinds.pop()] ?? 'standard' : 'standard';
-      return [{
-        x: left + x * (width + gap),
-        y: top + y * (height + gap),
-        width,
-        height,
-        row: y,
-        kind,
-        paint: palette?.[cell],
-        hitsLeft: kind === 'hard' ? 3 : 1,
-        points: 30,
-        active: true,
-      }];
-    });
+  return slots.map(({ cell, standardOnly, ...bounds }) => {
+    const kind = standardOnly ? 'standard' : BRICK_KINDS[kinds.pop()] ?? 'standard';
+    return {
+      ...bounds,
+      kind,
+      paint: palette?.[cell],
+      hitsLeft: kind === 'hard' ? 3 : 1,
+      points: 30,
+      active: true,
+    };
   });
+}
+
+function areBrickNeighbors(a, b) {
+  const gapX = Math.max(a.x - b.x - b.width, b.x - a.x - a.width);
+  const gapY = Math.max(a.y - b.y - b.height, b.y - a.y - a.height);
+  return gapX <= SHIELD_NEIGHBOR_GAP && gapY <= SHIELD_NEIGHBOR_GAP;
 }
 
 function brickContact(projectile, brick, radius = BALL_RADIUS) {
@@ -186,6 +246,8 @@ export class Game {
 
   loadLevel(phase) {
     this.bricks = makeBricks(this.level);
+    this.layoutBottom = Math.max(...this.bricks.map(({ y, height }) => y + height));
+    this.barrierY = Math.max(BARRIER.y, this.layoutBottom + 10);
     this.remaining = this.bricks.length;
     this.playTime = 0;
     this.clearPowerUps();
@@ -288,7 +350,7 @@ export class Game {
   findAttackContact(projectile, radius, duration) {
     let closest = null;
     if (projectile.vy < 0 && this.barriers.length > 0) {
-      const time = (BARRIER.y + BARRIER.height + radius - projectile.y) / projectile.vy;
+      const time = (this.barrierY + BARRIER.height + radius - projectile.y) / projectile.vy;
       if (time >= 0 && time <= duration) {
         const x = projectile.x + projectile.vx * time;
         const barrier = this.barriers.find((segment) => x >= segment.x && x < segment.x + BARRIER.width);
@@ -565,11 +627,11 @@ export class Game {
   }
 
   shieldAdjacentBricks(source) {
-    const { width, height, gap } = layouts[this.level - 1].grid;
-    const distance = (target) => Math.hypot(target.x - source.x, target.y - source.y);
+    const x = source.x + source.width / 2;
+    const y = source.y + source.height / 2;
+    const distance = (target) => Math.hypot(target.x + target.width / 2 - x, target.y + target.height / 2 - y);
     const neighbors = this.bricks.filter((target) => target.active && !target.shielded && target.detonatesAt === undefined
-      && Math.abs(target.x - source.x) <= width + gap
-      && Math.abs(target.y - source.y) <= height + gap);
+      && areBrickNeighbors(source, target));
     neighbors.sort((a, b) => distance(a) - distance(b));
     for (const target of neighbors.slice(0, 2)) {
       target.shielded = true;

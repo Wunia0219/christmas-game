@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BALL_RADIUS, BARRIER, BUFFS, BUFF_DURATION, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, LIVES, PADDLE, SHRINK_DURATION, TNT, WIDTH } from '../src/game.js';
+import { BALL_RADIUS, BARRIER, BRICK, BUFFS, BUFF_DURATION, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, LIVES, PADDLE, SHRINK_DURATION, TNT, WIDTH } from '../src/game.js';
+
+const levelBrickCounts = [54, 63, 71];
 
 function startGame() {
   const game = new Game(() => {});
@@ -33,10 +35,11 @@ test('each level shuffles brick types while keeping slots, counts, and 30 points
   let draw = 0;
   context.mock.method(Math, 'random', () => draw);
   const game = new Game(() => {});
+  assert.deepEqual(LEVEL_NAMES, ['Xmas', 'Giraffe', '十方　五甲']);
   const expectedCounts = [
-    { standard: 66, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
-    { standard: 104, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
-    { standard: 22, 'extra-ball': 4, buff: 4, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+    { standard: 38, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+    { standard: 47, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+    { standard: 53, 'extra-ball': 4, buff: 4, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
   ];
 
   for (const [index, counts] of expectedCounts.entries()) {
@@ -44,7 +47,7 @@ test('each level shuffles brick types while keeping slots, counts, and 30 points
     const [first, second] = [0, 0.999].map((sample) => {
       draw = sample;
       game.loadLevel('ready');
-      assert.equal(game.remaining, [82, 120, 40][index]);
+      assert.equal(game.remaining, levelBrickCounts[index]);
       const actualCounts = {};
       for (const { kind, hitsLeft, points } of game.bricks) {
         actualCounts[kind] = (actualCounts[kind] ?? 0) + 1;
@@ -59,12 +62,69 @@ test('each level shuffles brick types while keeping slots, counts, and 30 points
   }
 });
 
+test('the Xmas layout keeps its barrier below the bricks', () => {
+  const game = new Game(() => {});
+  assert(game.barrierY >= game.layoutBottom + 10);
+
+  game.action();
+  game.hitBrick(game.bricks.find(({ kind }) => kind === 'barrier'));
+  const [ball] = game.balls;
+  const contactY = game.barrierY + BARRIER.height + BALL_RADIUS;
+  Object.assign(ball, { x: BALL_RADIUS + 1, y: contactY + 1, vx: 0, vy: -400 });
+  game.update(1 / 120);
+  assert(ball.vy > 0);
+  assert.equal(game.barriers.length, 2);
+});
+
+test('Giraffe keeps the dot and f caps ordinary, and a normal serve can clear the last dot', (context) => {
+  context.mock.method(Math, 'random', () => 0);
+  const game = new Game(() => {});
+  game.reset(2);
+  const [dot] = game.bricks.filter(({ x, y }) => x === 181 && y === 81);
+  const caps = game.bricks.filter(({ x, y }) => y === 60 && x > WIDTH / 2);
+  assert.equal(dot.kind, 'standard');
+  assert.deepEqual(caps.map(({ kind }) => kind), ['standard', 'standard']);
+
+  game.bricks = [dot];
+  game.remaining = 1;
+  game.movePaddle(75);
+  game.action();
+  game.update(1.2);
+  assert.equal(game.phase, 'level-clear');
+  assert.equal(game.score, 30);
+});
+
+test('all layouts use equal rectangular collision areas and the last brick can be hit', () => {
+  const game = new Game(() => {});
+  assert(BRICK.width >= 2 * BRICK.height);
+  for (let level = 1; level <= LEVELS; level += 1) {
+    game.reset(level);
+    for (const [index, brick] of game.bricks.entries()) {
+      const { x, y, width, height } = brick;
+      assert.deepEqual({ width, height }, BRICK);
+      assert(x >= 0 && x + width <= WIDTH && y >= 0 && y + height < PADDLE.y);
+      assert(!game.bricks.slice(index + 1).some((other) =>
+        x < other.x + other.width && other.x < x + width
+        && y < other.y + other.height && other.y < y + height));
+    }
+  }
+
+  game.reset(1);
+  const lastBrick = game.bricks.findLast(({ kind }) => kind === 'standard');
+  game.bricks = [lastBrick];
+  game.remaining = 1;
+  game.action();
+  hitBrick(game, lastBrick);
+  assert.equal(game.phase, 'level-clear');
+  assert.equal(game.score, 30);
+});
+
 test('a run can start at any level and replay from the selected level', () => {
   const game = new Game(() => {});
   game.reset(LEVELS);
   assert.equal(game.phase, 'ready');
   assert.equal(game.level, LEVELS);
-  assert.equal(game.remaining, 40);
+  assert.equal(game.remaining, 71);
   assert.equal(game.score, 0);
   assert.equal(game.lives, LIVES);
 
@@ -145,6 +205,9 @@ test('a multiball brick releases three extra balls, and only losing all balls co
   });
   game.action();
   const brick = game.bricks.find(({ kind }) => kind === 'extra-ball');
+  const distantBrick = { ...brick, kind: 'standard', x: brick.x < WIDTH / 2 ? WIDTH - BRICK.width : 0 };
+  game.bricks = [brick, distantBrick];
+  game.remaining = game.bricks.length;
   const before = game.remaining;
   hitBrick(game, brick);
 
@@ -494,8 +557,7 @@ test('a shield brick adds up to two permanent one-hit shields with no scoring bo
   game.remaining = game.bricks.length;
   hitBrick(game, brick);
   const targets = game.bricks.filter(({ shielded }) => shielded);
-  assert.equal(targets.length, 2);
-  assert(targets.every(({ x, y }) => Math.abs(x - brick.x) <= 73 && Math.abs(y - brick.y) <= 31));
+  assert.deepEqual(targets, [left, right]);
   assert.equal(game.score, brick.points);
   const count = game.remaining;
 
@@ -618,6 +680,8 @@ test('losing the last ball, advancing a level, and restarting clear temporary ef
   game.action();
 
   for (let level = 1; level <= LEVELS; level += 1) {
+    assert.equal(game.level, level);
+    assert.equal(game.remaining, levelBrickCounts[level - 1]);
     game.activateBuff('guards');
     const expectedScore = game.score + game.bricks.reduce((sum, brick) => sum + brick.points, 0);
     for (const brick of [...game.bricks].reverse()) {

@@ -3,124 +3,140 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f7f4eb" />
-    <meta name="description" content="用球拍接住彈球，打破所有磚塊。使用 PixiJS 製作的復古打磚塊遊戲。" />
-    <title>Arkanoid | 打磚塊</title>
+    <meta name="theme-color" content="#0d1320" />
+    <meta name="description" content="東勢長頸鹿美語的打磚塊遊戲。選一關，用球拍接住彈球，打碎磚陣。" />
+    <title>Giraffe 打磚塊 | 東勢長頸鹿美語</title>
     <link rel="stylesheet" href="./src/style.css" />
     <script type="importmap">
       { "imports": { "pixi.js": "./vendor/pixi.mjs" } }
     </script>
   </head>
   <body>
-    <header class="page-header">
-      <div class="shell header-inner">
-        <span class="brand"><i class="brand-icon" aria-hidden="true"></i> ARKANOID</span>
-        <button class="button sound-button" id="sound" type="button" aria-pressed="false" disabled>
-          <i class="sound-icon" aria-hidden="true"></i><span id="sound-label">音效關</span>
-        </button>
-      </div>
-    </header>
-
-    <main class="shell">
-      <div class="hero">
-        <div>
-          <h1>ARKANOID<span class="title-translation">打磚塊</span></h1>
-          <div class="brick-legend" aria-label="特殊磚塊">
-            <span><i class="brick-mark extra-ball-mark" aria-hidden="true"></i>擊破釋放 3 顆額外球</span>
-            <span><i class="brick-mark buff-mark" aria-hidden="true">?</i>接住掉落道具可強化</span>
-            <span><i class="brick-mark hard-mark" aria-hidden="true">Ⅲ</i>硬磚需擊中 3 次</span>
-            <span><i class="brick-mark invisible-mark" aria-hidden="true"></i>透明磚穿過後顯形</span>
-            <span><i class="brick-mark tnt-mark" aria-hidden="true">TNT</i>擊中後延時爆炸</span>
-            <span><i class="brick-mark shrink-mark" aria-hidden="true">›‹</i>縮板磚掉落減益</span>
-            <span><i class="brick-mark shield-mark" aria-hidden="true"></i>護盾磚保護鄰磚</span>
-            <span><i class="brick-mark barrier-mark" aria-hidden="true">▪▪▪</i>攔截磚擋住向上攻擊</span>
-          </div>
-        </div>
-        <div class="hero-art" aria-hidden="true">
-          <span></span><span></span><span></span><i></i><b></b>
-        </div>
-      </div>
-
-      <div class="cabinet">
-        <section class="game-frame" aria-label="打磚塊遊戲">
-          <header class="game-header">
-            <div class="game-status">
-              <span class="status-light" aria-hidden="true"></span><span id="status">準備就緒</span>
-              <span class="ball-count" id="ball-count" hidden></span>
+    <main class="game-shell">
+      <section class="game-frame" aria-label="打磚塊遊戲">
+        <header class="topbar">
+          <div class="brand">
+            <i class="brand-icon" aria-hidden="true"></i>
+            <div>
+              <h1>GIRAFFE <span>打磚塊</span></h1>
+              <p>東勢長頸鹿美語</p>
             </div>
-            <label class="level-picker" id="level-picker" hidden>
-              <span>選擇關卡</span>
-              <select id="level-select"></select>
-            </label>
-            <button class="button pause-button" id="pause" type="button" disabled>
-              <i class="pause-icon" aria-hidden="true"></i><span id="pause-label">暫停</span>
-            </button>
-          </header>
-          <div id="field" class="field" tabindex="0" aria-label="遊戲畫面" aria-describedby="controls">
-            <div class="canvas-layer" id="canvas-layer" aria-hidden="true"></div>
-            <div class="life-loss-flash" id="life-loss-flash" aria-hidden="true" hidden></div>
-            <div class="overlay" id="overlay">
-              <div class="overlay-content">
-                <h2 id="message">準備開打？</h2>
-                <p id="detail" hidden></p>
-                <button class="button primary-button" id="action" type="button" disabled>
-                  <i class="play-icon" aria-hidden="true"></i><span id="action-label">載入中</span>
-                </button>
-              </div>
-            </div>
-            <div class="score-popups" id="score-popups" aria-hidden="true"></div>
           </div>
-        </section>
 
-        <aside class="sidebar" aria-label="遊戲資訊">
-          <section class="score-panel" aria-label="計分板">
-            <div class="score-current">
+          <div class="game-hud" role="group" aria-label="遊戲資訊">
+            <div class="hud-stat score-current">
               <span class="stat-label">分數</span><output class="score-number" id="score" aria-live="off">00000</output>
             </div>
-            <div class="score-best">
+            <div class="hud-stat">
               <span class="stat-label">最高分</span><output id="best" aria-live="off">00000</output>
             </div>
-          </section>
-
-          <section class="stats-panel" aria-label="關卡進度">
-            <div class="stat-row">
-              <span class="stat-label" id="lives-label">生命</span>
+            <div class="hud-stat">
+              <span class="stat-label">生命</span>
               <div class="hearts" id="lives" role="img" aria-label="剩下 3 條命">
                 <i class="heart" aria-hidden="true"></i><i class="heart" aria-hidden="true"></i><i class="heart" aria-hidden="true"></i>
               </div>
             </div>
-            <div class="stat-row">
-              <span class="stat-label">關卡</span><span class="figures"><strong id="level">01</strong><span id="level-total"> / 03</span></span>
+          </div>
+
+          <div class="toolbar" role="group" aria-label="遊戲選項">
+            <button class="button" id="help" type="button" aria-haspopup="dialog" disabled>
+              <i class="help-icon" aria-hidden="true">?</i><span class="toolbar-label">玩法</span>
+            </button>
+            <button class="button" id="sound" type="button" aria-pressed="false" disabled>
+              <i class="sound-icon" aria-hidden="true"></i><span class="toolbar-label" id="sound-label">音效關</span>
+            </button>
+            <button class="button" id="fullscreen" type="button" aria-pressed="false" hidden>
+              <i class="fullscreen-icon" aria-hidden="true"></i><span class="toolbar-label" id="fullscreen-label">全螢幕</span>
+            </button>
+          </div>
+        </header>
+
+        <div id="field" class="field" tabindex="0" aria-label="遊戲畫面" aria-describedby="controls">
+          <div class="canvas-layer" id="canvas-layer" aria-hidden="true"></div>
+          <div class="life-loss-flash" id="life-loss-flash" aria-hidden="true" hidden></div>
+          <div class="overlay" id="overlay">
+            <div class="overlay-content">
+              <h2 id="message">Xmas</h2>
+              <p id="detail" hidden></p>
+              <button class="button primary-button" id="action" type="button" disabled>
+                <i class="play-icon" aria-hidden="true"></i><span id="action-label">載入中</span>
+              </button>
+            </div>
+          </div>
+          <div class="score-popups" id="score-popups" aria-hidden="true"></div>
+        </div>
+
+        <footer class="game-deck">
+          <div class="deck-controls">
+            <div class="deck-level">
+              <label class="level-picker" id="level-picker" hidden>
+                <span class="stat-label">選擇關卡</span><select id="level-select"></select>
+              </label>
+              <div class="level-readout" id="level-readout">
+                <span class="stat-label">關卡</span><span class="figures"><strong id="level">01</strong><span id="level-total"> / 03</span></span>
+              </div>
             </div>
             <div class="brick-status">
-              <div class="stat-row"><span class="stat-label" id="brick-label">剩餘磚塊</span><span class="figures" id="remaining">82</span></div>
-              <progress id="progress" aria-labelledby="brick-label" max="82" value="82"></progress>
+              <div><span class="stat-label" id="brick-label">剩餘磚塊</span><span class="figures" id="remaining">54</span></div>
+              <progress id="progress" aria-labelledby="brick-label" max="54" value="54"></progress>
             </div>
-            <section class="buff-status" aria-label="限時效果">
-              <div class="buff-heading"><span class="stat-label">限時效果</span><span class="buff-idle" id="buff-idle">待收集</span></div>
-              <ul class="buff-list" id="buff-list" hidden>
-                <li id="buff-wide" hidden><span>球拍加長</span><span class="buff-time"></span></li>
-                <li id="buff-fast" hidden><span>球拍加速</span><span class="buff-time"></span></li>
-                <li id="buff-guards" hidden><span>底線保護 <span id="guard-count"></span></span><span class="buff-time"></span></li>
-                <li id="buff-cannons" hidden><span>雙側砲台</span><span class="buff-time"></span></li>
-                <li id="buff-shrink" class="nerf-effect" hidden><span>球拍縮短</span><span class="buff-time"></span></li>
-                <li id="buff-barrier" class="nerf-effect" hidden><span>磚陣攔截</span><span class="buff-time"></span></li>
-              </ul>
-            </section>
-          </section>
-
-          <button class="button restart-button" id="restart" type="button" disabled><span aria-hidden="true">↻</span> 重新開始</button>
-        </aside>
-      </div>
-
-      <section class="controls" id="controls" aria-label="操作方式">
-        <span class="controls-title">操作方式</span>
-        <span class="keys keyboard-control"><kbd>←</kbd><kbd>→</kbd> 移動</span>
-        <span class="keys keyboard-control"><kbd>Space</kbd> 發球</span>
-        <span class="keys keyboard-control"><kbd>Esc</kbd> 暫停</span>
-        <span class="pointer-controls"><i class="pointer-icon" aria-hidden="true"></i><span class="mouse-instructions">也可用滑鼠移動球拍</span><span class="touch-instructions">左右拖曳球拍，輕點發球</span></span>
+            <div class="deck-actions">
+              <button class="button pause-button" id="pause" type="button" disabled hidden>
+                <i class="pause-icon" aria-hidden="true"></i><span id="pause-label">暫停</span>
+              </button>
+              <button class="button" id="restart" type="button" disabled>
+                <i class="restart-icon" aria-hidden="true">↻</i><span>重新開始</span>
+              </button>
+            </div>
+          </div>
+          <div class="match-status">
+            <div class="game-status">
+              <span class="status-light" aria-hidden="true"></span><span id="status">準備就緒</span>
+              <span class="ball-count" id="ball-count" hidden></span>
+            </div>
+            <ul class="buff-list" id="buff-list" aria-label="限時效果" hidden>
+              <li id="buff-wide" hidden><span>球拍加長</span><span class="buff-time"></span></li>
+              <li id="buff-fast" hidden><span>球拍加速</span><span class="buff-time"></span></li>
+              <li id="buff-guards" hidden><span>底線保護 <span id="guard-count"></span></span><span class="buff-time"></span></li>
+              <li id="buff-cannons" hidden><span>雙側砲台</span><span class="buff-time"></span></li>
+              <li id="buff-shrink" class="nerf-effect" hidden><span>球拍縮短</span><span class="buff-time"></span></li>
+              <li id="buff-barrier" class="nerf-effect" hidden><span>磚陣攔截</span><span class="buff-time"></span></li>
+            </ul>
+          </div>
+        </footer>
       </section>
+
+      <p class="sr-only" id="controls">用方向鍵或滑鼠移動球拍，空白鍵發球，Escape 暫停。觸控時左右拖曳移動，輕點發球。</p>
       <p class="sr-only" id="announcement" role="status"></p>
+
+      <dialog class="help-dialog" id="help-dialog" aria-labelledby="help-title">
+        <header class="dialog-header">
+          <h2 id="help-title">遊戲玩法</h2>
+          <form method="dialog">
+            <button class="button dialog-close" type="submit" aria-label="關閉玩法" autofocus>×</button>
+          </form>
+        </header>
+        <div class="help-content">
+          <p>用球拍接住球，打碎所有磚塊即可過關。每塊磚值 30 分，TNT 會一次顯示自己和炸碎磚塊的合計分數。</p>
+          <h3>操作方式</h3>
+          <dl class="control-guide">
+            <div><dt>移動</dt><dd><kbd>←</kbd> <kbd>→</kbd>、滑鼠移動或左右拖曳</dd></div>
+            <div><dt>發球</dt><dd><kbd>Space</kbd> 或輕點球場</dd></div>
+            <div><dt>暫停</dt><dd><kbd>Esc</kbd> 或「暫停」按鈕</dd></div>
+          </dl>
+          <h3>特殊磚塊</h3>
+          <ul class="brick-legend">
+            <li><i class="brick-mark extra-ball-mark" aria-hidden="true"></i><span><strong>多球磚</strong>擊破後放出 3 顆球</span></li>
+            <li><i class="brick-mark buff-mark" aria-hidden="true">?</i><span><strong>道具磚</strong>接住掉落道具可強化</span></li>
+            <li><i class="brick-mark hard-mark" aria-hidden="true">Ⅲ</i><span><strong>硬磚</strong>需擊中 3 次</span></li>
+            <li><i class="brick-mark invisible-mark" aria-hidden="true"></i><span><strong>透明磚</strong>球穿過後顯形</span></li>
+            <li><i class="brick-mark tnt-mark" aria-hidden="true">TNT</i><span><strong>TNT</strong>擊中後延時爆炸</span></li>
+            <li><i class="brick-mark shrink-mark" aria-hidden="true">›‹</i><span><strong>縮板磚</strong>掉落會縮短球拍的道具</span></li>
+            <li><i class="brick-mark shield-mark" aria-hidden="true"></i><span><strong>護盾磚</strong>擊破後為鄰磚加護盾</span></li>
+            <li><i class="brick-mark barrier-mark" aria-hidden="true">▪▪▪</i><span><strong>攔截磚</strong>擊破後擋住向上攻擊</span></li>
+          </ul>
+        </div>
+      </dialog>
     </main>
     <script type="module" src="./src/main.js"></script>
   </body>

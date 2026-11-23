@@ -9,8 +9,12 @@ const actionButton = byId('action');
 const pauseButton = byId('pause');
 const levelPicker = byId('level-picker');
 const levelSelect = byId('level-select');
+const levelReadout = byId('level-readout');
 const restartButton = byId('restart');
 const soundButton = byId('sound');
+const helpButton = byId('help');
+const helpDialog = byId('help-dialog');
+const fullscreenButton = byId('fullscreen');
 const score = byId('score');
 const scorePopups = byId('score-popups');
 const best = byId('best');
@@ -19,7 +23,6 @@ const progress = byId('progress');
 const ballCount = byId('ball-count');
 const lifeLossFlash = byId('life-loss-flash');
 const buffList = byId('buff-list');
-const buffIdle = byId('buff-idle');
 const guardCount = byId('guard-count');
 const announcement = byId('announcement');
 const hearts = [...lives.children];
@@ -65,7 +68,7 @@ function expiryWarning(timeLeft) {
 }
 
 const screens = {
-  ready: { status: '準備就緒', title: '準備開打？', button: '開始遊戲' },
+  ready: { status: '準備就緒', button: '開始遊戲' },
   playing: { status: '遊戲進行中' },
   'life-loss': { status: '漏接' },
   serve: { status: '等待發球', title: '再發一球', button: '發球' },
@@ -234,15 +237,16 @@ function drawSolidBrick(graphic, brick) {
   const corner = Math.min(3, height / 4);
   const inset = Math.min(4, height / 3);
   const gloss = Math.min(2, height / 6);
+  const faceHeight = height - depth;
   graphic
     .roundRect(0, depth * 0.75, width, height, corner).fill(0x0b0a1b)
     .roundRect(0, 0, width, height, corner).fill(paint?.[1] ?? powerShadows[kind] ?? shadows[row])
-    .roundRect(0, 0, width, height - depth, corner).fill(color)
+    .roundRect(0, 0, width, faceHeight, corner).fill(color)
     .rect(inset, depth * 0.75, width - inset * 2, gloss).fill({ color: 0xffffff, alpha: 0.38 })
     .rect(inset, depth * 0.75 + gloss * 2, gloss, gloss).fill({ color: 0xffffff, alpha: 0.45 });
 
   const x = width / 2;
-  const y = (height - depth) / 2;
+  const y = faceHeight / 2;
   const scale = brickMarkScale(brick);
   if (paint && kind !== 'standard' && kind !== 'tnt') {
     const badgeColor = kind === 'hard' ? hardColors[brick.hitsLeft - 1] : powerColors[kind];
@@ -425,11 +429,11 @@ async function init() {
 
     heartPulse?.cancel();
     const frames = reduced
-      ? [{ backgroundColor: '#a73450' }, { backgroundColor: '#ddd5e5' }]
+      ? [{ backgroundColor: '#a73450' }, { backgroundColor: '#45516a' }]
       : [
           { transform: 'scale(1)', backgroundColor: '#f8647f' },
           { transform: 'scale(.58)', backgroundColor: '#a73450', offset: 0.47 },
-          { transform: 'scale(1)', backgroundColor: '#ddd5e5' },
+          { transform: 'scale(1)', backgroundColor: '#45516a' },
         ];
     heartPulse = hearts[game.lives].animate(frames, { duration: duration * 1000, easing: 'ease-out' });
   }
@@ -464,7 +468,6 @@ async function init() {
       const label = `${seconds} 秒`;
       if (timer.textContent !== label) timer.textContent = label;
     }
-    buffIdle.hidden = active;
     buffList.hidden = !active;
   }
 
@@ -487,6 +490,7 @@ async function init() {
       byId('level').textContent = number(game.level, 2);
       levelSelect.value = String(game.startLevel);
       progress.max = game.bricks.length;
+      field.style.setProperty('--layout-bottom', `${game.layoutBottom / HEIGHT * 100}%`);
       levelChanged = true;
     }
 
@@ -521,7 +525,7 @@ async function init() {
     }
 
     const phase = lifeLoss ? 'life-loss' : game.phase;
-    if (displayedPhase === phase) return;
+    if (displayedPhase === phase && !levelChanged) return;
     const screen = screens[phase];
     const wasPlaying = displayedPhase === 'playing' || displayedPhase === 'life-loss';
     displayedPhase = phase;
@@ -530,12 +534,13 @@ async function init() {
     announcement.textContent = phase === 'serve' ? `剩下 ${game.lives} 條命。${screen.title}。` : screen.status;
     overlay.hidden = phase === 'playing' || phase === 'life-loss';
     levelPicker.hidden = phase !== 'ready';
+    levelReadout.hidden = phase === 'ready';
     pauseButton.hidden = phase === 'ready';
     pauseButton.disabled = phase !== 'playing' && phase !== 'paused';
     byId('pause-label').textContent = phase === 'paused' ? '繼續' : '暫停';
     if (overlay.hidden) return;
     pointerX = undefined;
-    byId('message').textContent = screen.title;
+    byId('message').textContent = phase === 'ready' ? LEVEL_NAMES[game.level - 1] : screen.title;
     byId('action-label').textContent = screen.button;
     const detail = byId('detail');
     detail.hidden = phase !== 'won' && phase !== 'lost';
@@ -651,12 +656,13 @@ async function init() {
       }
     }
     const barrierWarning = expiryWarning(game.effectTimeLeft('barrier'));
+    const barrierY = game.barrierY;
     for (const { x } of game.barriers) {
       const width = BARRIER.width - 4;
-      powerUps.roundRect(x + 2, BARRIER.y, width, BARRIER.height, 3).fill(powerShadows.barrier)
-        .roundRect(x + 2, BARRIER.y + 3, width, BARRIER.height - 3, 3).fill(powerColors.barrier);
+      powerUps.roundRect(x + 2, barrierY, width, BARRIER.height, 3).fill(powerShadows.barrier)
+        .roundRect(x + 2, barrierY + 3, width, BARRIER.height - 3, 3).fill(powerColors.barrier);
       if (barrierWarning > 0) {
-        powerUps.roundRect(x + 2, BARRIER.y + 3, width, BARRIER.height - 3, 3)
+        powerUps.roundRect(x + 2, barrierY + 3, width, BARRIER.height - 3, 3)
           .fill({ color: 0xfff6dc, alpha: barrierWarning });
       }
     }
@@ -756,7 +762,7 @@ async function init() {
   }
 
   window.addEventListener('keydown', (event) => {
-    if (event.ctrlKey || event.metaKey || event.altKey || event.target === levelSelect) return;
+    if (helpDialog.open || event.ctrlKey || event.metaKey || event.altKey || event.target === levelSelect) return;
     if (leftKeys.includes(event.code) || rightKeys.includes(event.code)) {
       event.preventDefault();
       pointerX = undefined;
@@ -815,6 +821,10 @@ async function init() {
 
   actionButton.addEventListener('click', primaryAction);
   pauseButton.addEventListener('click', togglePause);
+  helpButton.addEventListener('click', () => {
+    pauseOnLeave();
+    helpDialog.showModal();
+  });
   levelSelect.addEventListener('change', () => {
     if (game.phase !== 'ready') return;
     keys.clear();
@@ -845,11 +855,28 @@ async function init() {
     byId('sound-label').textContent = soundEnabled ? '音效開' : '音效關';
     if (enabling && soundEnabled) playSound('launch');
   });
+  if (document.fullscreenEnabled) {
+    fullscreenButton.hidden = false;
+    fullscreenButton.addEventListener('click', async () => {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen();
+      } catch {
+        announcement.textContent = '目前無法切換全螢幕。';
+      }
+    });
+    document.addEventListener('fullscreenchange', () => {
+      const active = Boolean(document.fullscreenElement);
+      fullscreenButton.setAttribute('aria-pressed', String(active));
+      byId('fullscreen-label').textContent = active ? '退出全螢幕' : '全螢幕';
+    });
+  }
 
   byId('level-total').textContent = ` / ${number(LEVELS, 2)}`;
   levelSelect.replaceChildren(...LEVEL_NAMES.map((name, index) => new Option(`${number(index + 1, 2)} · ${name}`, index + 1)));
   best.textContent = number(bestScore, 5);
   actionButton.disabled = false;
+  helpButton.disabled = false;
   restartButton.disabled = false;
   soundButton.disabled = !(window.AudioContext || window.webkitAudioContext);
   syncHud();
