@@ -34,8 +34,8 @@ test('each level shuffles brick types while keeping slots, counts, and 30 points
   context.mock.method(Math, 'random', () => draw);
   const game = new Game(() => {});
   const expectedCounts = [
-    { standard: 34, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
-    { standard: 14, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+    { standard: 66, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+    { standard: 104, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
     { standard: 22, 'extra-ball': 4, buff: 4, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
   ];
 
@@ -44,7 +44,7 @@ test('each level shuffles brick types while keeping slots, counts, and 30 points
     const [first, second] = [0, 0.999].map((sample) => {
       draw = sample;
       game.loadLevel('ready');
-      assert.equal(game.remaining, [50, 30, 40][index]);
+      assert.equal(game.remaining, [82, 120, 40][index]);
       const actualCounts = {};
       for (const { kind, hitsLeft, points } of game.bricks) {
         actualCounts[kind] = (actualCounts[kind] ?? 0) + 1;
@@ -57,6 +57,26 @@ test('each level shuffles brick types while keeping slots, counts, and 30 points
     assert.deepEqual(first.map(({ x, y }) => [x, y]), second.map(({ x, y }) => [x, y]));
     assert.notDeepEqual(first.map(({ kind }) => kind), second.map(({ kind }) => kind));
   }
+});
+
+test('a run can start at any level and replay from the selected level', () => {
+  const game = new Game(() => {});
+  game.reset(LEVELS);
+  assert.equal(game.phase, 'ready');
+  assert.equal(game.level, LEVELS);
+  assert.equal(game.remaining, 40);
+  assert.equal(game.score, 0);
+  assert.equal(game.lives, LIVES);
+
+  game.action();
+  game.lives = 1;
+  sendBallOut(game.balls[0]);
+  game.update(0.01);
+  assert.equal(game.phase, 'lost');
+  game.action();
+  assert.equal(game.phase, 'playing');
+  assert.equal(game.level, LEVELS);
+  assert.equal(game.lives, LIVES);
 });
 
 test('a paddle arriving just after the ball crosses its top saves the ball', () => {
@@ -125,11 +145,12 @@ test('a multiball brick releases three extra balls, and only losing all balls co
   });
   game.action();
   const brick = game.bricks.find(({ kind }) => kind === 'extra-ball');
+  const before = game.remaining;
   hitBrick(game, brick);
 
   assert.equal(brick.active, false);
   assert.equal(game.score, brick.points);
-  assert.equal(game.remaining, 49);
+  assert.equal(game.remaining, before - 1);
   assert.equal(game.balls.length, 4);
   const [original, ...extras] = game.balls;
   assert.equal(releases.length, 1);
@@ -364,7 +385,7 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
     if (event === 'tnt-score') blastScores.push(payload);
   });
   game.action();
-  const center = game.bricks.find(({ kind }) => kind === 'tnt');
+  const center = { ...game.bricks.find(({ kind }) => kind === 'tnt'), x: 260, y: 100, width: 65, height: 23 };
   const { x, y, width, height } = center;
   const standard = { ...center, kind: 'standard', x: x - 73, y: y - 31 };
   const hard = { ...center, kind: 'hard', hitsLeft: 3, x: x + 73 };
@@ -465,11 +486,11 @@ test('the shrink drop can be dodged and temporarily reduces the current paddle w
 
 test('a shield brick adds up to two permanent one-hit shields with no scoring bonus', () => {
   const game = startGame();
-  const [left, center, right] = game.bricks.slice(-9, -6).map((brick) => ({
-    ...brick, kind: 'standard', hitsLeft: 1,
-  }));
+  const center = { ...game.bricks[0], x: WIDTH / 2, y: 150, kind: 'standard', hitsLeft: 1 };
+  const left = { ...center, x: center.x - center.width - 3 };
+  const right = { ...center, x: center.x + center.width + 3 };
   const brick = { ...center, kind: 'shield' };
-  game.bricks = [left, brick, right, { ...left, y: left.y - 31 }];
+  game.bricks = [left, brick, right, { ...left, y: left.y - center.height - 3 }];
   game.remaining = game.bricks.length;
   hitBrick(game, brick);
   const targets = game.bricks.filter(({ shielded }) => shielded);
@@ -601,7 +622,7 @@ test('losing the last ball, advancing a level, and restarting clear temporary ef
     const expectedScore = game.score + game.bricks.reduce((sum, brick) => sum + brick.points, 0);
     for (const brick of [...game.bricks].reverse()) {
       const hits = (brick.kind === 'invisible' ? 2 : brick.hitsLeft) + Number(Boolean(brick.shielded));
-      for (let index = 0; index < hits && brick.active; index += 1) hitBrick(game, brick);
+      for (let index = 0; index < hits && brick.active; index += 1) game.hitBrick(brick);
     }
     for (const ball of game.balls) Object.assign(ball, { vx: 0, vy: 0 });
     game.update(TNT.delay + 0.01);

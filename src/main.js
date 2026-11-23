@@ -1,5 +1,5 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import { BALL_RADIUS, BARRIER, BUFFS, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVELS, PADDLE, TNT, WIDTH } from './game.js';
+import { BALL_RADIUS, BARRIER, BUFFS, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TNT, WIDTH } from './game.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -7,6 +7,8 @@ const frame = field.closest('.game-frame');
 const overlay = byId('overlay');
 const actionButton = byId('action');
 const pauseButton = byId('pause');
+const levelPicker = byId('level-picker');
+const levelSelect = byId('level-select');
 const restartButton = byId('restart');
 const soundButton = byId('sound');
 const score = byId('score');
@@ -183,13 +185,16 @@ function drawPowerMark(graphic, kind, x, y) {
 }
 
 function drawBrick(brick, graphic = new Graphics()) {
-  const { width, height, kind } = brick;
+  const { width, height, kind, paint } = brick;
   graphic.clear();
   graphic.position.set(brick.x, brick.y);
   graphic.visible = brick.active;
   if (!graphic.visible) return graphic;
 
-  if (kind === 'invisible') {
+  if (kind === 'invisible' && paint) {
+    graphic.roundRect(0.8, 0.8, width - 1.6, height - 1.6, 2)
+      .fill({ color: paint[0], alpha: 0.22 }).stroke({ color: paint[0], alpha: 0.72, width: 1.3 });
+  } else if (kind === 'invisible') {
     for (let x = 5; x + 7 <= width - 5; x += 12) {
       graphic.moveTo(x, 1.5).lineTo(x + 7, 1.5)
         .moveTo(x, height - 1.5).lineTo(x + 7, height - 1.5);
@@ -210,41 +215,59 @@ function drawBrick(brick, graphic = new Graphics()) {
   return graphic;
 }
 
-function drawDurabilityPip(graphic, x, y, index, color, alpha) {
-  graphic.roundRect(x - 13 + index * 9, y - 1, 7, 5, 1.5).fill({ color, alpha });
+function brickMarkScale({ width, height }) {
+  return Math.min(1, (width - 2) / 30, (height - 2) / 13);
+}
+
+function drawDurabilityPip(graphic, x, y, index, color, alpha, scale) {
+  graphic.roundRect(x + (-13 + index * 9) * scale, y - scale, 7 * scale, 5 * scale, 1.5 * scale)
+    .fill({ color, alpha });
 }
 
 function drawSolidBrick(graphic, brick) {
-  const { width, height, row, kind } = brick;
-  let color = powerColors[kind] ?? hues[row];
-  if (kind === 'hard') color = hardColors[brick.hitsLeft - 1];
+  const { width, height, row, kind, paint } = brick;
+  let color = paint?.[0] ?? powerColors[kind] ?? hues[row];
+  if (kind === 'hard' && !paint) color = hardColors[brick.hitsLeft - 1];
   const armed = kind === 'tnt' && brick.detonatesAt !== undefined;
   if (armed) color = 0xffcf73;
+  const depth = Math.min(4, height / 4);
+  const corner = Math.min(3, height / 4);
+  const inset = Math.min(4, height / 3);
+  const gloss = Math.min(2, height / 6);
   graphic
-    .roundRect(0, 3, width, height, 3).fill(0x0b0a1b)
-    .roundRect(0, 0, width, height, 3).fill(powerShadows[kind] ?? shadows[row])
-    .roundRect(0, 0, width, height - 4, 3).fill(color)
-    .rect(4, 3, width - 8, 2).fill({ color: 0xffffff, alpha: 0.38 })
-    .rect(4, 7, 2, 2).fill({ color: 0xffffff, alpha: 0.45 });
+    .roundRect(0, depth * 0.75, width, height, corner).fill(0x0b0a1b)
+    .roundRect(0, 0, width, height, corner).fill(paint?.[1] ?? powerShadows[kind] ?? shadows[row])
+    .roundRect(0, 0, width, height - depth, corner).fill(color)
+    .rect(inset, depth * 0.75, width - inset * 2, gloss).fill({ color: 0xffffff, alpha: 0.38 })
+    .rect(inset, depth * 0.75 + gloss * 2, gloss, gloss).fill({ color: 0xffffff, alpha: 0.45 });
 
   const x = width / 2;
-  const y = (height - 4) / 2;
+  const y = (height - depth) / 2;
+  const scale = brickMarkScale(brick);
+  if (paint && kind !== 'standard' && kind !== 'tnt') {
+    const badgeColor = kind === 'hard' ? hardColors[brick.hitsLeft - 1] : powerColors[kind];
+    graphic.roundRect(x - 14 * scale, y - 6 * scale, 28 * scale, 13 * scale, 3 * scale)
+      .fill({ color: badgeColor, alpha: 0.9 });
+  }
   if (kind === 'hard') {
     for (let index = 0; index < 3; index += 1) {
-      drawDurabilityPip(graphic, x, y, index, dark, index < brick.hitsLeft ? 1 : 0.22);
+      drawDurabilityPip(graphic, x, y, index, dark, index < brick.hitsLeft ? 1 : 0.22, scale);
     }
   } else if (kind === 'tnt') {
-    graphic.roundRect(x - 15, y - 4, 30, 12, 3).fill(dark);
-    for (const offset of [-8, 8]) {
-      const letterX = x + offset;
-      graphic.moveTo(letterX - 2, y - 1).lineTo(letterX + 2, y - 1)
-        .moveTo(letterX, y - 1).lineTo(letterX, y + 5);
+    graphic.save().setTransform(scale, 0, 0, scale, x, y);
+    graphic.roundRect(-15, -4, 30, 12, 3).fill(dark);
+    for (const letterX of [-8, 8]) {
+      graphic.moveTo(letterX - 2, -1).lineTo(letterX + 2, -1)
+        .moveTo(letterX, -1).lineTo(letterX, 5);
     }
-    graphic.moveTo(x - 2, y + 5).lineTo(x - 2, y - 1).lineTo(x + 2, y + 5).lineTo(x + 2, y - 1)
+    graphic.moveTo(-2, 5).lineTo(-2, -1).lineTo(2, 5).lineTo(2, -1)
       .stroke({ color: 0xfff4dd, width: 1.4, cap: 'round', join: 'round' });
-    if (armed) graphic.star(x + 22, y + 2, 4, 5, 1.6).fill(0xfff4dd);
+    graphic.restore();
+    if (armed) graphic.star(Math.min(x + 22, width - 4), y + 2 * scale, 4, 5 * scale, 1.6 * scale).fill(0xfff4dd);
   } else if (kind !== 'standard') {
-    drawPowerMark(graphic, kind, x, y);
+    graphic.save().setTransform(scale, 0, 0, scale, x, y);
+    drawPowerMark(graphic, kind, 0, 0);
+    graphic.restore();
   }
 }
 
@@ -375,7 +398,7 @@ async function init() {
             vx: (Math.random() - 0.5) * 180,
             vy: (Math.random() - 0.5) * 150,
             life: sparkDuration,
-            color: powerColors[brick.kind] ?? hues[brick.row],
+            color: brick.paint?.[0] ?? powerColors[brick.kind] ?? hues[brick.row],
           });
         }
       }
@@ -462,6 +485,7 @@ async function init() {
       scorePopups.replaceChildren();
       displayedBricks = game.bricks;
       byId('level').textContent = number(game.level, 2);
+      levelSelect.value = String(game.startLevel);
       progress.max = game.bricks.length;
       levelChanged = true;
     }
@@ -505,6 +529,8 @@ async function init() {
     byId('status').textContent = screen.status;
     announcement.textContent = phase === 'serve' ? `剩下 ${game.lives} 條命。${screen.title}。` : screen.status;
     overlay.hidden = phase === 'playing' || phase === 'life-loss';
+    levelPicker.hidden = phase !== 'ready';
+    pauseButton.hidden = phase === 'ready';
     pauseButton.disabled = phase !== 'playing' && phase !== 'paused';
     byId('pause-label').textContent = phase === 'paused' ? '繼續' : '暫停';
     if (overlay.hidden) return;
@@ -673,8 +699,9 @@ async function init() {
       flash.life -= elapsed;
       const { brick, life, index } = flash;
       if (!brick.active || life <= 0) continue;
-      drawDurabilityPip(particles, brick.x + brick.width / 2, brick.y + (brick.height - 4) / 2,
-        index, 0xf9fbff, Math.min(1, life / hardFlashDuration * 1.65));
+      const faceHeight = brick.height - Math.min(4, brick.height / 4);
+      drawDurabilityPip(particles, brick.x + brick.width / 2, brick.y + faceHeight / 2,
+        index, 0xf9fbff, Math.min(1, life / hardFlashDuration * 1.65), brickMarkScale(brick));
     }
     durabilityFlashes = durabilityFlashes.filter(({ brick, life }) => brick.active && life > 0);
 
@@ -729,7 +756,7 @@ async function init() {
   }
 
   window.addEventListener('keydown', (event) => {
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || event.target === levelSelect) return;
     if (leftKeys.includes(event.code) || rightKeys.includes(event.code)) {
       event.preventDefault();
       pointerX = undefined;
@@ -788,9 +815,17 @@ async function init() {
 
   actionButton.addEventListener('click', primaryAction);
   pauseButton.addEventListener('click', togglePause);
-  restartButton.addEventListener('click', () => {
+  levelSelect.addEventListener('change', () => {
+    if (game.phase !== 'ready') return;
+    keys.clear();
     pointerX = undefined;
-    game.reset();
+    game.reset(Number(levelSelect.value));
+    syncHud();
+  });
+  restartButton.addEventListener('click', () => {
+    keys.clear();
+    pointerX = undefined;
+    game.reset(game.startLevel);
     syncHud();
     actionButton.focus({ preventScroll: true });
   });
@@ -812,6 +847,7 @@ async function init() {
   });
 
   byId('level-total').textContent = ` / ${number(LEVELS, 2)}`;
+  levelSelect.replaceChildren(...LEVEL_NAMES.map((name, index) => new Option(`${number(index + 1, 2)} · ${name}`, index + 1)));
   best.textContent = number(bestScore, 5);
   actionButton.disabled = false;
   restartButton.disabled = false;

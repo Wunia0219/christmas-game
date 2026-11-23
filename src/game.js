@@ -12,33 +12,78 @@ export const BUFF_DURATION = 12;
 export const SHRINK_DURATION = 5;
 export const BUFFS = ['wide', 'fast', 'guards', 'cannons'];
 
+const giraffeLetters = [
+  ['.###.', '#...#', '#....', '#.###', '#...#', '#...#', '.###.'], // G
+  ['#',     '.',     '#',     '#',     '#',     '#',     '#'],     // i
+  ['....',  '....',  '###.',  '##..',  '#...',  '#...',  '#...'],  // r
+  ['.....', '.....', '.###.', '....#', '.####', '#...#', '.####'], // a
+  ['.###',  '#...',  '###.',  '#...',  '#...',  '#...',  '#...'],  // f
+  ['.###',  '#...',  '###.',  '#...',  '#...',  '#...',  '#...'],  // f
+  ['.....', '.....', '.###.', '#...#', '#####', '#....', '.####'], // e
+];
+
+const standardGrid = { width: 65, height: 23, gap: 8, top: 36 };
+const draftSpecials = 'BBB???HHHIITTSPW';
 const layouts = [
-  [
-    '###H###H##',
-    '##?##I####',
-    '#T#####B##',
-    '#B##P#H###',
-    '##I?S#BW?T',
-  ],
-  [
-    '....HH....',
-    '...#I?#...',
-    '..#T#BPS..',
-    '.#?#H##I#.',
-    '##B#W?#TB#',
-  ],
-  [
-    '##H.HT.S##',
-    '#.##B##I.#',
-    '#B.T##?.##',
-    '#.?#B#H#.#',
-    '#?P.I?.WB#',
-  ],
+  {
+    name: 'Giraffe',
+    rows: giraffeLetters[0].map((_, row) => giraffeLetters
+      .map((letter, index) => letter[row].replaceAll('#', String(index))).join('.')),
+    grid: { width: 19, height: 20, gap: 3, top: 59 },
+    specials: draftSpecials,
+    palette: [
+      [0xff8b83, 0xb54960], [0xffad71, 0xb86146], [0xffca69, 0xb88740],
+      [0xffe17e, 0xb89146], [0x99e6bf, 0x488e7c], [0x93caff, 0x527fbd],
+      [0xc5adff, 0x7d60b5],
+    ],
+  },
+  {
+    name: '小路吉祥物',
+    rows: [
+      '......H..H......',
+      '......Y..Y......',
+      '...YO.YYYYY.OY..',
+      '....YYYYYYYYY...',
+      '.....YYYYYYYY...',
+      '.....YEEYEEYYY..',
+      '.....YEPYEPYYYY.',
+      '......YYYYMMMMM.',
+      '......YYMMMMNMM.',
+      '......YYYYMMMM..',
+      '.......YSY......',
+      '......YYYS......',
+      '......YYSY......',
+      '...H..SYYS..YY..',
+      '...YYYYYSYYYH...',
+      '....YSYYYSY.....',
+      '.....YY.YYY.....',
+      '.....HH..HHH....',
+    ],
+    grid: { width: 19, height: 10, gap: 2, top: 14 },
+    specials: draftSpecials,
+    specialCells: 'Y',
+    palette: {
+      Y: [0xf8cb55, 0xb88237], O: [0xf0a064, 0xa6593d], S: [0xc47c43, 0x894832],
+      H: [0x815144, 0x492c32], E: [0xfff4e0, 0xd4b194], P: [0x573132, 0x382436],
+      M: [0xffdf92, 0xc99856], N: [0xb4774d, 0x7e493f],
+    },
+  },
+  {
+    name: '暫用磚陣',
+    rows: [
+      '##H.HT.S##',
+      '#.##B##I.#',
+      '#B.T##?.##',
+      '#.?#B#H#.#',
+      '#?P.I?.WB#',
+    ],
+    grid: standardGrid,
+  },
 ];
 
 export const LEVELS = layouts.length;
+export const LEVEL_NAMES = layouts.map(({ name }) => name);
 
-const BRICK = { width: 65, height: 23, gap: 8, top: 36 };
 const BRICK_KINDS = {
   B: 'extra-ball', '?': 'buff', H: 'hard', I: 'invisible', T: 'tnt',
   S: 'shrink', P: 'shield', W: 'barrier',
@@ -56,26 +101,29 @@ const SEPARATION = 0.01;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 function makeBricks(level) {
-  const layout = layouts[level - 1];
-  const kinds = layout.flatMap((row) => [...row].filter((cell) => cell !== '.')
-    .map((cell) => BRICK_KINDS[cell] ?? 'standard'));
+  const { rows, grid: { width, height, gap, top }, palette, specials, specialCells } = layouts[level - 1];
+  const cells = [...rows.join('')].filter((cell) => cell !== '.');
+  const canShuffle = (cell) => !specialCells || specialCells.includes(cell);
+  const shuffleCount = cells.filter(canShuffle).length;
+  const kinds = specials ? [...specials.padEnd(shuffleCount, '#')] : cells;
   for (let index = kinds.length - 1; index > 0; index -= 1) {
     const other = Math.floor(Math.random() * (index + 1));
     [kinds[index], kinds[other]] = [kinds[other], kinds[index]];
   }
 
-  return layout.flatMap((row, y) => {
-    const left = (WIDTH - (row.length * (BRICK.width + BRICK.gap) - BRICK.gap)) / 2;
+  return rows.flatMap((row, y) => {
+    const left = (WIDTH - (row.length * (width + gap) - gap)) / 2;
     return [...row].flatMap((cell, x) => {
       if (cell === '.') return [];
-      const kind = kinds.pop();
+      const kind = canShuffle(cell) ? BRICK_KINDS[kinds.pop()] ?? 'standard' : 'standard';
       return [{
-        x: left + x * (BRICK.width + BRICK.gap),
-        y: BRICK.top + y * (BRICK.height + BRICK.gap),
-        width: BRICK.width,
-        height: BRICK.height,
+        x: left + x * (width + gap),
+        y: top + y * (height + gap),
+        width,
+        height,
         row: y,
         kind,
+        paint: palette?.[cell],
         hitsLeft: kind === 'hard' ? 3 : 1,
         points: 30,
         active: true,
@@ -127,8 +175,10 @@ export class Game {
     this.reset();
   }
 
-  reset() {
-    this.level = 1;
+  reset(level = 1) {
+    if (!Number.isInteger(level) || level < 1 || level > LEVELS) throw new RangeError('Unknown level');
+    this.startLevel = level;
+    this.level = level;
     this.lives = LIVES;
     this.score = 0;
     this.loadLevel('ready');
@@ -182,7 +232,7 @@ export class Game {
       this.phase = 'playing';
       return;
     }
-    if (this.phase === 'lost' || this.phase === 'won') this.reset();
+    if (this.phase === 'lost' || this.phase === 'won') this.reset(this.startLevel);
     if (this.phase === 'level-clear') {
       this.level += 1;
       this.loadLevel('serve');
@@ -515,10 +565,11 @@ export class Game {
   }
 
   shieldAdjacentBricks(source) {
+    const { width, height, gap } = layouts[this.level - 1].grid;
     const distance = (target) => Math.hypot(target.x - source.x, target.y - source.y);
     const neighbors = this.bricks.filter((target) => target.active && !target.shielded && target.detonatesAt === undefined
-      && Math.abs(target.x - source.x) <= BRICK.width + BRICK.gap
-      && Math.abs(target.y - source.y) <= BRICK.height + BRICK.gap);
+      && Math.abs(target.x - source.x) <= width + gap
+      && Math.abs(target.y - source.y) <= height + gap);
     neighbors.sort((a, b) => distance(a) - distance(b));
     for (const target of neighbors.slice(0, 2)) {
       target.shielded = true;

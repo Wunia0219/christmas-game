@@ -86,6 +86,9 @@ h1 { display: flex; align-items: center; gap: clamp(12px, 2.25vw, 30px); font: c
 .cabinet { display: grid; grid-template-columns: minmax(0, 1fr) 228px; gap: 21px; align-items: stretch; }
 .game-frame { min-width: 0; padding: 0 11px 11px; border: 2px solid var(--ink); border-radius: 13px; box-shadow: 5px 5px var(--ink); background: var(--lavender); }
 .game-header { display: flex; align-items: center; justify-content: space-between; min-height: 54px; padding-left: 6px; }
+.level-picker { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .85rem; font-weight: 800; white-space: nowrap; }
+.level-picker select { min-height: 44px; max-width: 100%; padding: 0 9px; border: 2px solid var(--ink); border-radius: 7px; background: var(--paper); color: var(--ink); font: inherit; cursor: pointer; }
+.game-frame[data-phase='ready'] .game-status { display: none; }
 .game-status { display: flex; align-items: center; gap: 9px; font-size: .85rem; font-weight: 800; letter-spacing: .09em; }
 .ball-count { padding: 3px 6px; border: 1px solid #49888c; border-radius: 4px; background: #d3f5f2; color: #184b51; font-size: .73rem; letter-spacing: 0; white-space: nowrap; }
 .status-light { width: 11px; height: 11px; border-radius: 50%; background: #a57eff; border: 1px solid var(--ink); }
