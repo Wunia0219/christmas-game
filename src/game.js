@@ -2,6 +2,8 @@ export const WIDTH = 800;
 export const HEIGHT = 480;
 export const BRICK = { width: 42, height: 16 };
 export const LIVES = 3;
+export const ROUND_SECONDS = 90;
+export const TIME_BONUS_RATE = 20;
 export const BALL_RADIUS = 7;
 export const PADDLE = { width: 112, height: 13, y: 447 };
 export const DROP_RADIUS = 11;
@@ -162,6 +164,7 @@ const SHOT_SPEED = 760;
 const SHIELD_NEIGHBOR_GAP = 8;
 const MAX_STEP = 1 / 120;
 const SEPARATION = 0.01;
+const CLOCK_EPSILON = 1e-9;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 function makeBricks(level) {
@@ -241,6 +244,9 @@ export class Game {
     this.level = level;
     this.lives = LIVES;
     this.score = 0;
+    this.timeLeft = ROUND_SECONDS;
+    this.timeBonus = 0;
+    this.pausedFrom = undefined;
     this.loadLevel('ready');
   }
 
@@ -281,6 +287,10 @@ export class Game {
     return PADDLE_SPEED * (this.effectTimeLeft('fast') > 0 ? 1.6 : 1);
   }
 
+  get countdownRunning() {
+    return this.phase === 'playing' || this.phase === 'serve' || this.phase === 'level-clear';
+  }
+
   movePaddle(x) {
     if (this.phase !== 'ready' && this.phase !== 'serve' && this.phase !== 'playing') return;
     const half = this.paddleWidth / 2;
@@ -291,10 +301,10 @@ export class Game {
   action() {
     if (this.phase === 'playing') return;
     if (this.phase === 'paused') {
-      this.phase = 'playing';
+      this.togglePause();
       return;
     }
-    if (this.phase === 'lost' || this.phase === 'won') this.reset(this.startLevel);
+    if (this.phase === 'lost' || this.phase === 'time-up' || this.phase === 'won') this.reset(this.startLevel);
     if (this.phase === 'level-clear') {
       this.level += 1;
       this.loadLevel('serve');
@@ -310,8 +320,23 @@ export class Game {
   }
 
   togglePause() {
-    if (this.phase === 'playing') this.phase = 'paused';
-    else if (this.phase === 'paused') this.phase = 'playing';
+    if (this.phase === 'paused') {
+      this.phase = this.pausedFrom;
+      this.pausedFrom = undefined;
+    } else if (this.countdownRunning) {
+      this.pausedFrom = this.phase;
+      this.phase = 'paused';
+    }
+  }
+
+  advanceClock(seconds) {
+    if (!this.countdownRunning) return;
+    this.timeLeft = Math.max(0, this.timeLeft - seconds);
+    if (this.timeLeft > CLOCK_EPSILON) return;
+    this.timeLeft = 0;
+    this.phase = 'time-up';
+    this.balls = [];
+    this.clearPowerUps();
   }
 
   findContact(ball, duration, paddleX, paddleVelocity) {
@@ -374,17 +399,22 @@ export class Game {
     return closest;
   }
 
-  update(seconds, { direction = 0, pointerX } = {}) {
+  update(seconds, { direction = 0, pointerX, elapsedSeconds = seconds } = {}) {
     if (this.phase !== 'playing') {
+      this.advanceClock(elapsedSeconds);
       if (direction) this.movePaddle(this.paddleX + direction * this.paddleSpeed * seconds);
       return;
     }
 
-    while (seconds > 0 && this.phase === 'playing') {
-      const step = Math.min(seconds, MAX_STEP);
+    // Count wall time that the capped physics update cannot simulate.
+    this.advanceClock(Math.max(0, elapsedSeconds - seconds));
+    while (seconds > 0 && this.phase === 'playing' && this.timeLeft > CLOCK_EPSILON) {
+      const step = Math.min(seconds, MAX_STEP, this.timeLeft);
+      this.timeLeft -= step;
       this.updatePlay(step, direction, pointerX);
       seconds -= step;
     }
+    this.advanceClock(seconds);
   }
 
   updatePlay(seconds, direction, pointerX) {
@@ -470,7 +500,7 @@ export class Game {
         if (dx * dx + dy * dy > TNT.radius ** 2) continue;
         this.hitBrick(target);
       }
-      this.onEvent('tnt-score', { x, y, points: this.score - scoreBeforeBlast });
+      this.onEvent('tnt-score', { x, y, points: this.score - scoreBeforeBlast - this.timeBonus });
       if (this.phase !== 'playing') return;
     }
   }
@@ -599,6 +629,10 @@ export class Game {
     this.remaining -= 1;
     if (this.remaining === 0) {
       this.phase = this.level < LEVELS ? 'level-clear' : 'won';
+      if (this.phase === 'won' && this.startLevel === 1) {
+        this.timeBonus = Math.floor(this.timeLeft + CLOCK_EPSILON) * TIME_BONUS_RATE;
+        this.score += this.timeBonus;
+      }
       this.balls = [];
       this.clearPowerUps();
       this.onEvent('clear', brick);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BALL_RADIUS, BARRIER, BRICK, BUFFS, BUFF_DURATION, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, LIVES, PADDLE, SHRINK_DURATION, TNT, WIDTH } from '../src/game.js';
+import { BALL_RADIUS, BARRIER, BRICK, BUFFS, BUFF_DURATION, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, LIVES, PADDLE, ROUND_SECONDS, SHRINK_DURATION, TIME_BONUS_RATE, TNT, WIDTH } from '../src/game.js';
 
 const levelBrickCounts = [54, 63, 71];
 
@@ -137,6 +137,70 @@ test('a run can start at any level and replay from the selected level', () => {
   assert.equal(game.phase, 'playing');
   assert.equal(game.level, LEVELS);
   assert.equal(game.lives, LIVES);
+});
+
+test('the round counts uncapped elapsed time after launch, freezes on pause, and resets on replay', () => {
+  const game = new Game(() => {});
+  game.update(20);
+  assert.equal(game.timeLeft, ROUND_SECONDS);
+
+  game.action();
+  game.hitBrick(game.bricks.find(({ kind }) => kind === 'standard'));
+  game.update(0.02, { elapsedSeconds: 12.5 });
+  assert(Math.abs(game.timeLeft - 77.5) < 1e-9);
+  game.togglePause();
+  const pausedTime = game.timeLeft;
+  game.update(0.02, { elapsedSeconds: 120 });
+  assert.equal(game.timeLeft, pausedTime);
+  assert.equal(game.phase, 'paused');
+
+  game.action();
+  game.activateBuff('guards');
+  game.update(0.02, { elapsedSeconds: 77.5 });
+  assert.equal(game.phase, 'time-up');
+  assert.equal(game.timeLeft, 0);
+  assert.equal(game.lives, LIVES);
+  assert.equal(game.score, 30);
+  assert.equal(game.timeBonus, 0);
+  assert.equal(game.balls.length, 0);
+  assert.equal(game.guards.length, 0);
+
+  game.action();
+  assert.equal(game.phase, 'playing');
+  assert.equal(game.timeLeft, ROUND_SECONDS);
+  assert.equal(game.lives, LIVES);
+  assert.equal(game.score, 0);
+});
+
+test('the same countdown and lives carry through a missed ball and a level change', () => {
+  const game = startGame();
+  sendBallOut(game.balls[0]);
+  game.update(0.01);
+  assert.equal(game.phase, 'serve');
+  assert.equal(game.lives, LIVES - 1);
+  const timeBeforeServe = game.timeLeft;
+  game.update(3);
+  assert.equal(game.timeLeft, timeBeforeServe - 3);
+
+  game.togglePause();
+  game.update(30);
+  assert.equal(game.timeLeft, timeBeforeServe - 3);
+  game.action();
+  assert.equal(game.phase, 'serve');
+  game.action();
+
+  const lastBrick = game.bricks.find(({ kind }) => kind === 'standard');
+  game.bricks = [lastBrick];
+  game.remaining = 1;
+  game.hitBrick(lastBrick);
+  assert.equal(game.phase, 'level-clear');
+  const timeAtClear = game.timeLeft;
+  game.update(4);
+  game.action();
+  assert.equal(game.phase, 'playing');
+  assert.equal(game.level, 2);
+  assert.equal(game.lives, LIVES - 1);
+  assert.equal(game.timeLeft, timeAtClear - 4);
 });
 
 test('a paddle arriving just after the ball crosses its top saves the ball', () => {
@@ -498,26 +562,44 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
   }]);
 });
 
-test('TNT reports the full blast score when it clears the level', () => {
-  const blastScores = [];
-  const game = new Game((event, payload) => {
-    if (event === 'tnt-score') blastScores.push(payload);
-  });
-  game.action();
-  const tnt = game.bricks.find(({ kind }) => kind === 'tnt');
-  const neighbor = { ...tnt, kind: 'standard', y: tnt.y + 31 };
-  game.bricks = [tnt, neighbor];
-  game.remaining = game.bricks.length;
-  tnt.detonatesAt = 0;
+test('a full clear awards 20 points per whole second and keeps the bonus out of the TNT popup', () => {
+  for (const startLevel of [1, LEVELS]) {
+    const blastScores = [];
+    const game = new Game((event, payload) => {
+      if (event === 'tnt-score') blastScores.push(payload);
+    });
+    game.reset(startLevel);
+    game.action();
+    while (game.level < LEVELS) {
+      const brick = game.bricks.find(({ kind }) => kind === 'standard');
+      game.bricks = [brick];
+      game.remaining = 1;
+      game.hitBrick(brick);
+      game.action();
+    }
+    game.update(0, { elapsedSeconds: ROUND_SECONDS - 12.9 });
+    const tnt = game.bricks.find(({ kind }) => kind === 'tnt');
+    const neighbor = { ...tnt, kind: 'standard', y: tnt.y + 31 };
+    game.bricks = [tnt, neighbor];
+    game.remaining = 2;
+    tnt.detonatesAt = 0;
 
-  game.update(1 / 120);
+    const scoreBeforeBlast = game.score;
+    game.update(1 / 120);
 
-  assert.equal(game.phase, 'level-clear');
-  assert.deepEqual(blastScores, [{
-    x: tnt.x + tnt.width / 2,
-    y: tnt.y + tnt.height / 2,
-    points: 60,
-  }]);
+    assert.equal(game.phase, 'won');
+    assert.equal(game.timeBonus, startLevel === 1 ? 12 * TIME_BONUS_RATE : 0);
+    assert.equal(game.score, scoreBeforeBlast + 60 + game.timeBonus);
+    assert.deepEqual(blastScores, [{
+      x: tnt.x + tnt.width / 2,
+      y: tnt.y + tnt.height / 2,
+      points: 60,
+    }]);
+    const timeAtWin = game.timeLeft;
+    game.update(20);
+    assert.equal(game.timeLeft, timeAtWin);
+    assert.equal(game.score, scoreBeforeBlast + 60 + game.timeBonus);
+  }
 });
 
 test('the shrink drop can be dodged and temporarily reduces the current paddle width by a quarter', () => {
@@ -691,7 +773,9 @@ test('losing the last ball, advancing a level, and restarting clear temporary ef
     for (const ball of game.balls) Object.assign(ball, { vx: 0, vy: 0 });
     game.update(TNT.delay + 0.01);
     assert.equal(game.remaining, 0);
-    assert.equal(game.score, expectedScore);
+    const bonus = level === LEVELS ? Math.floor(game.timeLeft) * TIME_BONUS_RATE : 0;
+    assert.equal(game.timeBonus, bonus);
+    assert.equal(game.score, expectedScore + bonus);
     assert.equal(game.phase, level < LEVELS ? 'level-clear' : 'won');
     assert.equal(game.guards.length, 0);
     assert.equal(game.barriers.length, 0);

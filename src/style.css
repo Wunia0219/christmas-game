@@ -83,6 +83,8 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .stat-label { color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .06em; white-space: nowrap; }
 .game-hud output, .figures { font: 700 .9rem/1 var(--mono); white-space: nowrap; }
 .game-hud .score-number { color: var(--gold); font-size: clamp(1.2rem, 2.8cqw, 1.7rem); letter-spacing: -.06em; transform-origin: left center; }
+.game-hud .time-number { color: var(--mint); font-variant-numeric: tabular-nums; }
+.game-hud .time-low { color: #ff9eab; }
 .hearts { display: flex; align-items: center; gap: 4px; min-height: 14px; }
 .heart { width: 16px; height: 14px; background: #f8647f; clip-path: polygon(0 13%, 12% 13%, 12% 0, 38% 0, 38% 13%, 62% 13%, 62% 0, 88% 0, 88% 13%, 100% 13%, 100% 48%, 88% 48%, 88% 61%, 75% 61%, 75% 74%, 62% 74%, 62% 87%, 50% 100%, 38% 87%, 38% 74%, 25% 74%, 25% 61%, 12% 61%, 12% 48%, 0 48%); }
 .heart.depleted { background: #45516a; }
@@ -180,6 +182,7 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .overlay-content { display: grid; justify-items: center; gap: clamp(4px, 1cqw, 12px); }
 .overlay h2 { font-size: clamp(1.16rem, 5cqw, 3rem); line-height: 1; font-weight: 900; letter-spacing: .05em; text-shadow: 0 3px #080e1d; }
 .overlay p { font: 700 .8rem/1.2 var(--mono); color: var(--muted); }
+.overlay .time-bonus { color: var(--gold); }
 .button.primary-button {
   pointer-events: auto;
   min-width: 132px;
@@ -217,7 +220,7 @@ progress::-moz-progress-bar { background: var(--mint); border-radius: 4px; }
 .game-status { display: flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--muted); font-size: .72rem; font-weight: 800; }
 .status-light { width: 7px; height: 7px; border-radius: 50%; background: #b8a7ff; }
 [data-phase='playing'] .status-light { background: var(--mint); }
-[data-phase='life-loss'] .status-light, [data-phase='lost'] .status-light { background: #ff8297; }
+[data-phase='life-loss'] .status-light, [data-phase='lost'] .status-light, [data-phase='time-up'] .status-light { background: #ff8297; }
 .ball-count { color: var(--mint); margin-left: 4px; }
 .buff-list { display: flex; align-items: center; gap: 5px; min-width: 0; margin: 0; padding: 0; list-style: none; overflow-x: auto; scrollbar-width: thin; }
 .buff-list li { display: flex; align-items: center; gap: 6px; min-height: 20px; padding: 0 6px; border: 1px solid #426b6b; border-radius: 5px; color: var(--mint); background: var(--surface); font-size: .71rem; font-weight: 750; white-space: nowrap; }

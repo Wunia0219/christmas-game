@@ -1,5 +1,5 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import { BALL_RADIUS, BARRIER, BUFFS, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TNT, WIDTH } from './game.js';
+import { BALL_RADIUS, BARRIER, BUFFS, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -16,6 +16,8 @@ const helpButton = byId('help');
 const helpDialog = byId('help-dialog');
 const fullscreenButton = byId('fullscreen');
 const score = byId('score');
+const clock = byId('time-left');
+const timeBonus = byId('time-bonus');
 const scorePopups = byId('score-popups');
 const best = byId('best');
 const lives = byId('lives');
@@ -75,6 +77,7 @@ const screens = {
   paused: { status: '已暫停', title: '遊戲暫停', button: '繼續遊戲' },
   'level-clear': { status: '關卡完成', title: '關卡完成！', button: '下一關' },
   lost: { status: '遊戲結束', title: '遊戲結束', button: '再玩一次' },
+  'time-up': { status: '時間到', title: '時間到！', button: '再玩一次' },
   won: { status: '全數通關', title: '全數通關！', button: '再玩一次' },
 };
 
@@ -412,12 +415,14 @@ async function init() {
   let displayedBricks;
   let displayedPhase;
   let displayedScore;
+  let displayedTime;
   let scorePulse;
   let displayedLives;
   let displayedRemaining;
   let displayedBallCount;
   let displayedGuardCount;
   let pointerX;
+  let clockResumedAt = -Infinity;
 
   function startLifeLoss(x) {
     const reduced = reducedMotion.matches;
@@ -473,6 +478,14 @@ async function init() {
 
   function syncHud() {
     syncPowerHud();
+    const showTimeBonus = game.phase === 'won' && game.startLevel === 1;
+    const bonusSeconds = game.timeBonus / TIME_BONUS_RATE;
+    const secondsLeft = showTimeBonus ? bonusSeconds : Math.ceil(game.timeLeft);
+    if (displayedTime !== secondsLeft) {
+      displayedTime = secondsLeft;
+      clock.textContent = `${Math.floor(secondsLeft / 60)}:${number(secondsLeft % 60, 2)}`;
+      clock.classList.toggle('time-low', secondsLeft <= 10);
+    }
     let levelChanged = false;
     if (displayedBricks !== game.bricks) {
       for (const old of bricks.removeChildren()) old.destroy();
@@ -524,6 +537,10 @@ async function init() {
       displayedRemaining = game.remaining;
     }
 
+    if (lifeLoss && game.phase === 'time-up') {
+      lifeLoss = undefined;
+      lifeLossFlash.hidden = true;
+    }
     const phase = lifeLoss ? 'life-loss' : game.phase;
     if (displayedPhase === phase && !levelChanged) return;
     const screen = screens[phase];
@@ -536,15 +553,17 @@ async function init() {
     levelPicker.hidden = phase !== 'ready';
     levelReadout.hidden = phase === 'ready';
     pauseButton.hidden = phase === 'ready';
-    pauseButton.disabled = phase !== 'playing' && phase !== 'paused';
+    pauseButton.disabled = !game.countdownRunning && phase !== 'paused';
     byId('pause-label').textContent = phase === 'paused' ? '繼續' : '暫停';
     if (overlay.hidden) return;
     pointerX = undefined;
     byId('message').textContent = phase === 'ready' ? LEVEL_NAMES[game.level - 1] : screen.title;
     byId('action-label').textContent = screen.button;
     const detail = byId('detail');
-    detail.hidden = phase !== 'won' && phase !== 'lost';
+    detail.hidden = phase !== 'won' && phase !== 'lost' && phase !== 'time-up';
     detail.textContent = detail.hidden ? '' : `最終分數 ${game.score.toLocaleString('zh-TW')}`;
+    timeBonus.hidden = !showTimeBonus;
+    timeBonus.textContent = showTimeBonus ? `時間獎分 +${game.timeBonus.toLocaleString('zh-TW')} 分（剩餘 ${bonusSeconds} 秒）` : '';
     if (wasPlaying && document.activeElement === field && document.hasFocus()) {
       actionButton.focus({ preventScroll: true });
     }
@@ -552,6 +571,7 @@ async function init() {
 
   function primaryAction() {
     if (lifeLoss) return;
+    if (!game.countdownRunning) clockResumedAt = performance.now();
     game.action();
     syncHud();
     field.focus({ preventScroll: true });
@@ -735,7 +755,8 @@ async function init() {
   }
 
   app.ticker.add((ticker) => {
-    const seconds = Math.min(ticker.deltaMS / 1000, 0.04);
+    const elapsedSeconds = Math.min(ticker.elapsedMS, performance.now() - clockResumedAt) / 1000;
+    const seconds = Math.min(ticker.deltaMS / 1000, elapsedSeconds, 0.04);
     const direction = Number(rightKeys.some((key) => keys.has(key))) - Number(leftKeys.some((key) => keys.has(key)));
     updateLifeLoss(seconds);
     if (game.phase !== 'paused') {
@@ -748,13 +769,14 @@ async function init() {
         else ballFlashes.set(ball, life - seconds);
       }
     }
-    game.update(seconds, { direction, pointerX });
+    game.update(seconds, { direction, pointerX, elapsedSeconds });
     syncHud();
     renderPlayfield();
     renderBrickEffects(seconds);
   });
 
   function togglePause() {
+    if (game.phase === 'paused') clockResumedAt = performance.now();
     game.togglePause();
     syncHud();
     if (game.phase === 'playing') field.focus({ preventScroll: true });
@@ -778,7 +800,7 @@ async function init() {
 
   function pauseOnLeave() {
     keys.clear();
-    if (game.phase === 'playing') {
+    if (game.countdownRunning) {
       game.togglePause();
       syncHud();
     }
