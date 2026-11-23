@@ -29,6 +29,36 @@ function bounceOffPaddle(game) {
   assert(ball.vy < 0);
 }
 
+test('each level shuffles brick types while keeping slots, counts, and 30 points per brick', (context) => {
+  let draw = 0;
+  context.mock.method(Math, 'random', () => draw);
+  const game = new Game(() => {});
+  const expectedCounts = [
+    { standard: 34, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+    { standard: 14, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+    { standard: 22, 'extra-ball': 4, buff: 4, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+  ];
+
+  for (const [index, counts] of expectedCounts.entries()) {
+    game.level = index + 1;
+    const [first, second] = [0, 0.999].map((sample) => {
+      draw = sample;
+      game.loadLevel('ready');
+      assert.equal(game.remaining, [50, 30, 40][index]);
+      const actualCounts = {};
+      for (const { kind, hitsLeft, points } of game.bricks) {
+        actualCounts[kind] = (actualCounts[kind] ?? 0) + 1;
+        assert.equal(points, 30);
+        assert.equal(hitsLeft, kind === 'hard' ? 3 : 1);
+      }
+      assert.deepEqual(actualCounts, counts);
+      return game.bricks;
+    });
+    assert.deepEqual(first.map(({ x, y }) => [x, y]), second.map(({ x, y }) => [x, y]));
+    assert.notDeepEqual(first.map(({ kind }) => kind), second.map(({ kind }) => kind));
+  }
+});
+
 test('a paddle arriving just after the ball crosses its top saves the ball', () => {
   const impacts = [];
   const game = new Game((event, payload) => {
@@ -151,14 +181,16 @@ test('a life loss reports the last exit location when multiple balls leave in th
 });
 
 test('buff drops descend vertically and must be caught by the paddle', (context) => {
-  const random = context.mock.method(Math, 'random', () => 0);
   const game = startGame();
+  const random = context.mock.method(Math, 'random', () => 0);
   const brick = game.bricks.find(({ kind }) => kind === 'buff');
   hitBrick(game, brick);
   assert.equal(game.drops.length, 1);
   const [drop] = game.drops;
   const x = drop.x;
   const y = drop.y;
+  Object.assign(game.balls[0], { vx: 0, vy: 0 });
+  game.movePaddle(x < WIDTH / 2 ? WIDTH : 0);
   game.update(0.1);
   assert.equal(drop.x, x);
   assert(drop.y > y);
@@ -200,6 +232,7 @@ test('buff and nerf drops are missed if the paddle arrives after the grace windo
   const random = context.mock.method(Math, 'random', () => 0);
   for (const kind of ['buff', 'shrink']) {
     const game = startGame();
+    const callsBeforeDrop = random.mock.callCount();
     const drop = { x: game.paddleX + PADDLE.width, y: PADDLE.y - DROP_RADIUS - 1, kind };
     game.drops.push(drop);
     game.update(0.06);
@@ -208,8 +241,8 @@ test('buff and nerf drops are missed if the paddle arrives after the grace windo
     assert.deepEqual(game.drops, [drop]);
     assert.equal(game.effectTimeLeft('wide'), 0);
     assert.equal(game.effectTimeLeft('shrink'), 0);
+    assert.equal(random.mock.callCount(), callsBeforeDrop);
   }
-  assert.equal(random.mock.callCount(), 0);
 });
 
 test('a caught cannon buff fires from both ends only when the paddle bounces a ball', (context) => {
@@ -251,7 +284,7 @@ test('each cannon shot stops at its first brick and triggers that brick’s effe
   game.action();
   const [ball] = game.balls;
   const shotX = game.paddleX - game.paddleWidth / 2 + CANNON.inset;
-  const target = { x: shotX - 20, width: 40, height: 20, points: 10, active: true };
+  const target = { x: shotX - 20, width: 40, height: 20, points: 30, active: true };
   const extra = { ...target, kind: 'extra-ball', y: 100 };
   const buff = { ...target, kind: 'buff', y: 180 };
   const standard = { ...target, kind: 'standard', y: 260 };
@@ -272,7 +305,7 @@ test('each cannon shot stops at its first brick and triggers that brick’s effe
       assert.equal(game.drops.length, 1);
     }
   }
-  assert.equal(game.score, 30);
+  assert.equal(game.score, 90);
   assert.equal(game.remaining, 1);
   assert.equal(game.balls.filter(({ bonus }) => bonus).length, 3);
   assert.deepEqual(events.filter((event) => event === 'brick' || event === 'extra-ball'), ['brick', 'brick', 'extra-ball']);
@@ -281,7 +314,7 @@ test('each cannon shot stops at its first brick and triggers that brick’s effe
   bounceOffPaddle(game);
   game.update(0.4);
   assert.equal(game.phase, 'level-clear');
-  assert.equal(game.score, 40);
+  assert.equal(game.score, 120);
   assert.equal(game.shots.length, 0);
   assert.equal(game.effectTimeLeft('cannons'), 0);
 });
@@ -368,9 +401,8 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
   assert.equal(invisible.kind, 'standard');
   assert(invisible.active && distant.active && otherTnt.active);
   assert(otherTnt.detonatesAt > game.playTime);
-  const firstPoints = center.points + standard.points + buff.points;
-  assert.equal(game.score, firstPoints);
-  assert.deepEqual(blastScores, [{ x: x + width / 2, y: y + height / 2, points: firstPoints }]);
+  assert.equal(game.score, 90);
+  assert.deepEqual(blastScores, [{ x: x + width / 2, y: y + height / 2, points: 90 }]);
 
   game.update(TNT.delay);
   assert.equal(otherTnt.active, false);
@@ -378,7 +410,7 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
   assert(invisible.active && distant.active);
   assert.equal(game.remaining, 3);
   assert.deepEqual(blastScores.slice(1), [{
-    x: otherTnt.x + width / 2, y: otherTnt.y + height / 2, points: otherTnt.points,
+    x: otherTnt.x + width / 2, y: otherTnt.y + height / 2, points: 30,
   }]);
 });
 
@@ -389,7 +421,7 @@ test('TNT reports the full blast score when it clears the level', () => {
   });
   game.action();
   const tnt = game.bricks.find(({ kind }) => kind === 'tnt');
-  const neighbor = { ...tnt, kind: 'standard', y: tnt.y + 31, points: 20 };
+  const neighbor = { ...tnt, kind: 'standard', y: tnt.y + 31 };
   game.bricks = [tnt, neighbor];
   game.remaining = game.bricks.length;
   tnt.detonatesAt = 0;
@@ -400,7 +432,7 @@ test('TNT reports the full blast score when it clears the level', () => {
   assert.deepEqual(blastScores, [{
     x: tnt.x + tnt.width / 2,
     y: tnt.y + tnt.height / 2,
-    points: tnt.points + neighbor.points,
+    points: 60,
   }]);
 });
 
@@ -414,7 +446,7 @@ test('the shrink drop can be dodged and temporarily reduces the current paddle w
   assert.equal(drop.kind, 'shrink');
   Object.assign(game.balls[0], { vx: 0, vy: 0 });
   const catchY = PADDLE.y - DROP_RADIUS - 1;
-  game.movePaddle(0);
+  game.movePaddle(drop.x < WIDTH / 2 ? WIDTH : 0);
   drop.y = catchY;
   game.update(0.4);
   assert.equal(game.drops.length, 0);
@@ -433,7 +465,12 @@ test('the shrink drop can be dodged and temporarily reduces the current paddle w
 
 test('a shield brick adds up to two permanent one-hit shields with no scoring bonus', () => {
   const game = startGame();
-  const brick = game.bricks.find(({ kind }) => kind === 'shield');
+  const [left, center, right] = game.bricks.slice(-9, -6).map((brick) => ({
+    ...brick, kind: 'standard', hitsLeft: 1,
+  }));
+  const brick = { ...center, kind: 'shield' };
+  game.bricks = [left, brick, right, { ...left, y: left.y - 31 }];
+  game.remaining = game.bricks.length;
   hitBrick(game, brick);
   const targets = game.bricks.filter(({ shielded }) => shielded);
   assert.equal(targets.length, 2);
@@ -449,7 +486,7 @@ test('a shield brick adds up to two permanent one-hit shields with no scoring bo
   game.update(BUFF_DURATION + 1);
   assert(targets.every(({ shielded }) => shielded));
 
-  const target = targets.find(({ kind }) => kind === 'standard');
+  const [target] = targets;
   hitBrick(game, target);
   assert(game.balls[0].vy > 0);
   assert(target.active && !target.shielded);

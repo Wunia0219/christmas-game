@@ -56,19 +56,31 @@ const SEPARATION = 0.01;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 function makeBricks(level) {
-  return layouts[level - 1].flatMap((row, y) => {
+  const layout = layouts[level - 1];
+  const kinds = layout.flatMap((row) => [...row].filter((cell) => cell !== '.')
+    .map((cell) => BRICK_KINDS[cell] ?? 'standard'));
+  for (let index = kinds.length - 1; index > 0; index -= 1) {
+    const other = Math.floor(Math.random() * (index + 1));
+    [kinds[index], kinds[other]] = [kinds[other], kinds[index]];
+  }
+
+  return layout.flatMap((row, y) => {
     const left = (WIDTH - (row.length * (BRICK.width + BRICK.gap) - BRICK.gap)) / 2;
-    return [...row].flatMap((cell, x) => cell !== '.' ? [{
-      x: left + x * (BRICK.width + BRICK.gap),
-      y: BRICK.top + y * (BRICK.height + BRICK.gap),
-      width: BRICK.width,
-      height: BRICK.height,
-      row: y,
-      kind: BRICK_KINDS[cell] ?? 'standard',
-      hitsLeft: cell === 'H' ? 3 : 1,
-      points: (5 - y) * 10,
-      active: true,
-    }] : []);
+    return [...row].flatMap((cell, x) => {
+      if (cell === '.') return [];
+      const kind = kinds.pop();
+      return [{
+        x: left + x * (BRICK.width + BRICK.gap),
+        y: BRICK.top + y * (BRICK.height + BRICK.gap),
+        width: BRICK.width,
+        height: BRICK.height,
+        row: y,
+        kind,
+        hitsLeft: kind === 'hard' ? 3 : 1,
+        points: 30,
+        active: true,
+      }];
+    });
   });
 }
 
