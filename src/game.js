@@ -279,8 +279,19 @@ export class Game {
 
     // Newly released balls and shots start moving on the next step.
     const shotCount = this.shots.length;
+    let lastExitTime = -Infinity;
+    let lastExitX;
     for (let index = this.balls.length - 1; index >= 0; index -= 1) {
-      if (!this.updateBall(this.balls[index], seconds, paddleStartX, paddleVelocity)) this.balls.splice(index, 1);
+      const ball = this.balls[index];
+      const exitTime = this.updateBall(ball, seconds, paddleStartX, paddleVelocity);
+      if (exitTime !== undefined) {
+        this.balls.splice(index, 1);
+        // The last ball to cross the bottom may not be the last one processed.
+        if (exitTime > lastExitTime) {
+          lastExitTime = exitTime;
+          lastExitX = ball.x;
+        }
+      }
       if (this.phase !== 'playing') return;
     }
 
@@ -292,7 +303,7 @@ export class Game {
         this.stageBall();
         this.movePaddle(this.paddleX);
       }
-      this.onEvent('miss');
+      this.onEvent('miss', { x: lastExitX });
       return;
     }
 
@@ -323,18 +334,20 @@ export class Game {
       if (!brick.active || brick.detonatesAt === undefined || brick.detonatesAt > this.playTime) continue;
       const x = brick.x + brick.width / 2;
       const y = brick.y + brick.height / 2;
+      const scoreBeforeBlast = this.score;
       this.onEvent('tnt-explode', { x, y });
       this.destroyBrick(brick);
-      if (this.phase !== 'playing') return;
 
       for (const target of this.bricks) {
+        if (this.phase !== 'playing') break;
         if (!target.active) continue;
         const dx = x - clamp(x, target.x, target.x + target.width);
         const dy = y - clamp(y, target.y, target.y + target.height);
         if (dx * dx + dy * dy > TNT.radius ** 2) continue;
         this.hitBrick(target);
-        if (this.phase !== 'playing') return;
       }
+      this.onEvent('tnt-score', { x, y, points: this.score - scoreBeforeBlast });
+      if (this.phase !== 'playing') return;
     }
   }
 
@@ -376,10 +389,9 @@ export class Game {
       ball.y += ball.vy * elapsed;
       paddleX += paddleVelocity * elapsed;
       timeLeft -= elapsed;
-      if (contact?.kind === 'miss') return false;
+      if (contact?.kind === 'miss') return seconds - timeLeft;
       if (contact) this.handleContact(ball, contact, paddleX);
     }
-    return true;
   }
 
   handleContact(ball, contact, paddleX) {
@@ -473,10 +485,11 @@ export class Game {
     const y = brick.y + brick.height / 2;
     if (brick.kind === 'extra-ball') {
       const direction = x < WIDTH / 2 ? 1 : -1;
-      for (const [offset, speed] of [[-15, -125], [0, 75], [15, 185]]) {
-        this.balls.push({ x: x + offset * direction, y, vx: speed * direction, vy: 310, bonus: true });
-      }
-      this.onEvent('extra-ball', brick);
+      const spawnedBalls = [[-15, -125], [0, 75], [15, 185]].map(([offset, speed]) => ({
+        x: x + offset * direction, y, vx: speed * direction, vy: 310, bonus: true,
+      }));
+      this.balls.push(...spawnedBalls);
+      this.onEvent('extra-ball', brick, spawnedBalls);
       return;
     }
     if (brick.kind === 'buff' || brick.kind === 'shrink') this.drops.push({ x, y, kind: brick.kind });

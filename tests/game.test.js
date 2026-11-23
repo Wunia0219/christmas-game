@@ -87,7 +87,13 @@ test('paddle grace ends when too much time or distance has passed', () => {
 });
 
 test('a multiball brick releases three extra balls, and only losing all balls costs a life', () => {
-  const game = startGame();
+  const releases = [];
+  const misses = [];
+  const game = new Game((event, brick, spawnedBalls) => {
+    if (event === 'extra-ball') releases.push({ brick, spawnedBalls });
+    if (event === 'miss') misses.push(brick);
+  });
+  game.action();
   const brick = game.bricks.find(({ kind }) => kind === 'extra-ball');
   hitBrick(game, brick);
 
@@ -96,6 +102,10 @@ test('a multiball brick releases three extra balls, and only losing all balls co
   assert.equal(game.remaining, 49);
   assert.equal(game.balls.length, 4);
   const [original, ...extras] = game.balls;
+  assert.equal(releases.length, 1);
+  assert.equal(releases[0].brick, brick);
+  assert.equal(releases[0].spawnedBalls.length, extras.length);
+  extras.forEach((ball, index) => assert.equal(releases[0].spawnedBalls[index], ball));
   assert(extras.every((ball) => ball.bonus && ball.vy > 0));
   assert.equal(new Set(extras.map(({ vx }) => vx)).size, 3);
   const initialY = extras[0].y;
@@ -105,6 +115,7 @@ test('a multiball brick releases three extra balls, and only losing all balls co
   assert(extras.every((ball) => ball.y > initialY));
   assert.equal(game.lives, LIVES);
   assert.equal(game.phase, 'playing');
+  assert.deepEqual(misses, []);
 
   game.movePaddle(650);
   extras.forEach(sendBallOut);
@@ -114,11 +125,29 @@ test('a multiball brick releases three extra balls, and only losing all balls co
   assert.equal(game.phase, 'serve');
   assert.equal(game.paddleX, 650);
   assert.equal(game.balls[0].x, game.paddleX);
+  assert.deepEqual(misses, [{ x: 8 }]);
 
   game.action();
   assert.equal(game.phase, 'playing');
   assert.equal(game.balls[0].x, game.paddleX);
   assert(game.balls[0].vy < 0);
+});
+
+test('a life loss reports the last exit location when multiple balls leave in the same step', () => {
+  const misses = [];
+  const game = new Game((event, payload) => {
+    if (event === 'miss') misses.push(payload);
+  });
+  game.action();
+  game.balls = [
+    { x: 120, y: HEIGHT + BALL_RADIUS - 1, vx: 0, vy: 400 },
+    { x: 680, y: HEIGHT + BALL_RADIUS - 3, vx: 0, vy: 400 },
+  ];
+
+  game.update(1 / 120);
+
+  assert.equal(game.lives, LIVES - 1);
+  assert.deepEqual(misses, [{ x: 680 }]);
 });
 
 test('buff drops descend vertically and must be caught by the paddle', (context) => {
@@ -297,8 +326,10 @@ test('a ball passes through a concealed brick before it becomes a solid one-hit 
 });
 
 test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', () => {
-  const events = [];
-  const game = new Game((event) => events.push(event));
+  const blastScores = [];
+  const game = new Game((event, payload) => {
+    if (event === 'tnt-score') blastScores.push(payload);
+  });
   game.action();
   const center = game.bricks.find(({ kind }) => kind === 'tnt');
   const { x, y, width, height } = center;
@@ -337,14 +368,40 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
   assert.equal(invisible.kind, 'standard');
   assert(invisible.active && distant.active && otherTnt.active);
   assert(otherTnt.detonatesAt > game.playTime);
-  assert.equal(game.score, center.points + standard.points + buff.points);
+  const firstPoints = center.points + standard.points + buff.points;
+  assert.equal(game.score, firstPoints);
+  assert.deepEqual(blastScores, [{ x: x + width / 2, y: y + height / 2, points: firstPoints }]);
 
   game.update(TNT.delay);
   assert.equal(otherTnt.active, false);
   assert.equal(hard.hitsLeft, 1);
   assert(invisible.active && distant.active);
   assert.equal(game.remaining, 3);
-  assert.equal(events.filter((event) => event === 'tnt-explode').length, 2);
+  assert.deepEqual(blastScores.slice(1), [{
+    x: otherTnt.x + width / 2, y: otherTnt.y + height / 2, points: otherTnt.points,
+  }]);
+});
+
+test('TNT reports the full blast score when it clears the level', () => {
+  const blastScores = [];
+  const game = new Game((event, payload) => {
+    if (event === 'tnt-score') blastScores.push(payload);
+  });
+  game.action();
+  const tnt = game.bricks.find(({ kind }) => kind === 'tnt');
+  const neighbor = { ...tnt, kind: 'standard', y: tnt.y + 31, points: 20 };
+  game.bricks = [tnt, neighbor];
+  game.remaining = game.bricks.length;
+  tnt.detonatesAt = 0;
+
+  game.update(1 / 120);
+
+  assert.equal(game.phase, 'level-clear');
+  assert.deepEqual(blastScores, [{
+    x: tnt.x + tnt.width / 2,
+    y: tnt.y + tnt.height / 2,
+    points: tnt.points + neighbor.points,
+  }]);
 });
 
 test('the shrink drop can be dodged and temporarily reduces the current paddle width by a quarter', () => {

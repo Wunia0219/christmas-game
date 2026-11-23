@@ -90,6 +90,7 @@ h1 { display: flex; align-items: center; gap: clamp(12px, 2.25vw, 30px); font: c
 .ball-count { padding: 3px 6px; border: 1px solid #49888c; border-radius: 4px; background: #d3f5f2; color: #184b51; font-size: .73rem; letter-spacing: 0; white-space: nowrap; }
 .status-light { width: 11px; height: 11px; border-radius: 50%; background: #a57eff; border: 1px solid var(--ink); }
 .game-frame[data-phase='playing'] .status-light { background: #48d1a5; }
+.game-frame[data-phase='life-loss'] .status-light { background: #bb566c; }
 .game-frame[data-phase='lost'] .status-light { background: #ff7f91; }
 .pause-button { border: 0; padding-inline: 12px; background: transparent; }
 .button.pause-button:not(:disabled):hover { background: #d8c9fb; }
@@ -100,7 +101,17 @@ h1 { display: flex; align-items: center; gap: clamp(12px, 2.25vw, 30px); font: c
 .field::after { position: absolute; inset: 0; content: ''; background: linear-gradient(#d0baff10 1px, transparent 1px), linear-gradient(90deg, #d0baff10 1px, transparent 1px); background-size: 25px 25px; background-position: center top; z-index: -1; }
 .canvas-layer { position: absolute; inset: 0; }
 .canvas-layer canvas { display: block; width: 100%; height: 100%; }
+.life-loss-flash {
+  position: absolute;
+  bottom: 0;
+  width: min(18%, 124px);
+  height: clamp(18px, 8%, 36px);
+  translate: -50% 0;
+  background: radial-gradient(ellipse at 50% 100%, #bc4155 0%, #8c2844dd 32%, #70203900 74%);
+  pointer-events: none;
+}
 .score-popups { position: absolute; inset: 0; pointer-events: none; container-type: inline-size; }
+.canvas-layer, .score-popups { translate: var(--blast-offset, none); }
 .brick-score {
   position: absolute;
   translate: -50% -50%;
