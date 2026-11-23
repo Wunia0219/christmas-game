@@ -415,6 +415,12 @@ export class Game {
       this.breakBarrier(contact.barrier);
       return;
     }
+    if (contact.kind === 'paddle') {
+      const halfWidth = this.paddleWidth / 2;
+      const x = clamp(ball.x, paddleX - halfWidth, paddleX + halfWidth);
+      this.onEvent('paddle', { x, y: PADDLE.y });
+      return;
+    }
     if (contact.kind === 'guard') {
       this.guards.splice(this.guards.indexOf(contact.guard), 1);
       if (this.guards.length === 0) delete this.effects.guards;

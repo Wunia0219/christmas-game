@@ -30,11 +30,16 @@ function bounceOffPaddle(game) {
 }
 
 test('a paddle arriving just after the ball crosses its top saves the ball', () => {
-  const game = startGame();
+  const impacts = [];
+  const game = new Game((event, payload) => {
+    if (event === 'paddle') impacts.push(payload);
+  });
+  game.action();
   game.activateBuff('guards');
   const [ball] = game.balls;
   const contactY = PADDLE.y - BALL_RADIUS;
-  Object.assign(ball, { x: game.paddleX + PADDLE.width / 2 + BALL_RADIUS + 15, y: contactY - 1, vx: 0, vy: 420 });
+  const paddleEdgeAtImpact = game.paddleX + PADDLE.width / 2 + 15;
+  Object.assign(ball, { x: paddleEdgeAtImpact + BALL_RADIUS, y: contactY - 1, vx: 0, vy: 420 });
 
   game.update(0.008, { direction: 1 });
   assert(ball.y > contactY);
@@ -45,6 +50,7 @@ test('a paddle arriving just after the ball crosses its top saves the ball', () 
   assert(ball.y < contactY);
   assert.equal(game.lives, LIVES);
   assert.equal(game.guards.length, 3);
+  assert.deepEqual(impacts, [{ x: paddleEdgeAtImpact, y: PADDLE.y }]);
 });
 
 test('a moving paddle can still catch a ball it overlaps at the start of a step', () => {

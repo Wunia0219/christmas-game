@@ -10,6 +10,7 @@ const pauseButton = byId('pause');
 const restartButton = byId('restart');
 const soundButton = byId('sound');
 const score = byId('score');
+const scorePopups = byId('score-popups');
 const best = byId('best');
 const lives = byId('lives');
 const progress = byId('progress');
@@ -38,6 +39,7 @@ const powerShadows = {
 const shieldColor = 0xc1f0ff;
 const hardColors = [0xa5afc7, 0xbdcce9, powerColors.hard];
 const blastDuration = 0.28;
+const paddleImpactDuration = 0.18;
 const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護', cannons: '雙側砲台' };
 const dark = 0x252142;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -204,6 +206,16 @@ function drawSolidBrick(graphic, brick) {
   }
 }
 
+function showBrickScore(brick) {
+  const popup = document.createElement('span');
+  popup.className = 'brick-score';
+  popup.textContent = `+${brick.points}`;
+  popup.style.left = `${(brick.x + brick.width / 2) / WIDTH * 100}%`;
+  popup.style.top = `${(brick.y + brick.height / 2) / HEIGHT * 100}%`;
+  popup.addEventListener('animationend', () => popup.remove(), { once: true });
+  scorePopups.append(popup);
+}
+
 async function init() {
   const app = new Application();
   await app.init({
@@ -233,13 +245,20 @@ async function init() {
   const rightCannon = leftCannon.clone();
   const balls = new Graphics();
   const powerUps = new Graphics();
-  app.stage.addChild(bricks, trail, particles, powerUps, paddle, leftCannon, rightCannon, balls);
+  const paddleStars = new Graphics();
+  app.stage.addChild(bricks, trail, particles, powerUps, paddle, leftCannon, rightCannon, paddleStars, balls);
 
   let brickViews = new Map();
   let sparks = [];
   let blasts = [];
+  let paddleImpacts = [];
   const game = new Game((event, payload) => {
     playSound(event);
+    if (event === 'paddle') {
+      paddleImpacts.push({ ...payload, age: 0 });
+      return;
+    }
+    if (event === 'miss') paddleImpacts.length = 0;
     if (event === 'buff') {
       announcement.textContent = `獲得${buffNames[payload]}。`;
       return;
@@ -259,6 +278,7 @@ async function init() {
         return;
       }
       view.visible = false;
+      showBrickScore(brick);
       if (!reducedMotion.matches) {
         for (let index = 0; index < 7; index += 1) {
           sparks.push({
@@ -277,6 +297,7 @@ async function init() {
   let displayedBricks;
   let displayedPhase;
   let displayedScore;
+  let scorePulse;
   let displayedLives;
   let displayedRemaining;
   let displayedBallCount;
@@ -314,6 +335,8 @@ async function init() {
       brickViews = new Map(game.bricks.map((brick) => [brick, bricks.addChild(drawBrick(brick))]));
       sparks = [];
       blasts = [];
+      paddleImpacts.length = 0;
+      scorePopups.replaceChildren();
       displayedBricks = game.bricks;
       byId('level').textContent = number(game.level, 2);
       progress.max = game.bricks.length;
@@ -322,6 +345,14 @@ async function init() {
 
     if (displayedScore !== game.score) {
       score.textContent = number(game.score, 5);
+      scorePulse?.cancel();
+      if (game.score > displayedScore && !reducedMotion.matches) {
+        scorePulse = score.animate([
+          { transform: 'scale(1)' },
+          { transform: 'scale(1.08)', offset: 0.3 },
+          { transform: 'scale(1)' },
+        ], { duration: 240, easing: 'ease-out' });
+      }
       displayedScore = game.score;
       if (game.score > bestScore) {
         bestScore = game.score;
@@ -374,6 +405,39 @@ async function init() {
   const leftKeys = ['ArrowLeft', 'KeyA'];
   const rightKeys = ['ArrowRight', 'KeyD'];
 
+  function renderPaddle() {
+    const reduced = reducedMotion.matches;
+    const latest = paddleImpacts.at(-1);
+    let stretch = 0;
+    if (latest && !reduced) {
+      const progress = latest.age / paddleImpactDuration;
+      // Recover from compression, then briefly stretch before returning to rest.
+      stretch = progress < 0.4
+        ? -0.34 * (1 - progress / 0.4) ** 2
+        : 0.13 * Math.sin((progress - 0.4) / 0.6 * Math.PI);
+    }
+    paddle.position.set(game.paddleX, PADDLE.y - PADDLE.height * stretch);
+    paddle.scale.set(game.paddleWidth / PADDLE.width * (1 - stretch * 0.16), 1 + stretch);
+
+    leftCannon.visible = rightCannon.visible = game.effectTimeLeft('cannons') > 0;
+    if (leftCannon.visible) {
+      const offset = game.paddleWidth / 2 - CANNON.inset;
+      leftCannon.position.set(game.paddleX - offset, CANNON.muzzleY);
+      rightCannon.position.set(game.paddleX + offset, CANNON.muzzleY);
+    }
+
+    paddleStars.clear();
+    for (const { x, y, age } of paddleImpacts) {
+      const progress = age / paddleImpactDuration;
+      const alpha = 1 - progress ** 2;
+      const radius = reduced ? 8 : 9 + 3 * Math.sin(progress * Math.PI);
+      paddleStars.circle(x, y, radius + 3).fill({ color: 0xffcf58, alpha: alpha * 0.2 })
+        .star(x, y, 4, radius, radius * 0.36)
+        .fill({ color: 0xffdf6b, alpha })
+        .stroke({ color: 0xfff6d8, width: 1, alpha });
+    }
+  }
+
   function renderPlayfield() {
     for (const [brick, view] of brickViews) {
       if (!brick.active || brick.detonatesAt === undefined) continue;
@@ -389,14 +453,7 @@ async function init() {
       view.tint = 0xff0000 | (green << 8) | blue;
     }
 
-    paddle.position.set(game.paddleX, PADDLE.y);
-    paddle.scale.x = game.paddleWidth / PADDLE.width;
-    leftCannon.visible = rightCannon.visible = game.effectTimeLeft('cannons') > 0;
-    if (leftCannon.visible) {
-      const offset = game.paddleWidth / 2 - CANNON.inset;
-      leftCannon.position.set(game.paddleX - offset, CANNON.muzzleY);
-      rightCannon.position.set(game.paddleX + offset, CANNON.muzzleY);
-    }
+    renderPaddle();
     balls.clear();
     trail.clear();
     for (const { x, y, vx, vy, bonus } of game.balls) {
@@ -448,6 +505,10 @@ async function init() {
   app.ticker.add((ticker) => {
     const seconds = Math.min(ticker.deltaMS / 1000, 0.04);
     const direction = Number(rightKeys.some((key) => keys.has(key))) - Number(leftKeys.some((key) => keys.has(key)));
+    if (game.phase !== 'paused' && paddleImpacts.length > 0) {
+      for (const impact of paddleImpacts) impact.age += seconds;
+      paddleImpacts = paddleImpacts.filter(({ age }) => age < paddleImpactDuration);
+    }
     game.update(seconds, { direction, pointerX });
     syncHud();
     renderPlayfield();
