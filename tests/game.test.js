@@ -81,14 +81,15 @@ test('Giraffe keeps the dot and f caps ordinary, and a normal serve can clear th
   context.mock.method(Math, 'random', () => 0);
   const game = new Game(() => {});
   game.reset(2);
-  const [dot] = game.bricks.filter(({ x, y }) => x === 181 && y === 81);
-  const caps = game.bricks.filter(({ x, y }) => y === 60 && x > WIDTH / 2);
+  const [top, , dotRow] = [...new Set(game.bricks.map(({ y }) => y))];
+  const [dot] = game.bricks.filter(({ y }) => y === dotRow);
+  const caps = game.bricks.filter(({ x, y }) => y === top && x > WIDTH / 2);
   assert.equal(dot.kind, 'standard');
   assert.deepEqual(caps.map(({ kind }) => kind), ['standard', 'standard']);
 
   game.bricks = [dot];
   game.remaining = 1;
-  game.movePaddle(75);
+  game.movePaddle(dot.x + dot.width / 2 - 125);
   game.action();
   game.update(1.2);
   assert.equal(game.phase, 'level-clear');
@@ -97,13 +98,15 @@ test('Giraffe keeps the dot and f caps ordinary, and a normal serve can clear th
 
 test('all layouts use equal rectangular collision areas and the last brick can be hit', () => {
   const game = new Game(() => {});
+  const wallGap = WIDTH * 0.02;
   assert(BRICK.width >= 2 * BRICK.height);
   for (let level = 1; level <= LEVELS; level += 1) {
     game.reset(level);
     for (const [index, brick] of game.bricks.entries()) {
       const { x, y, width, height } = brick;
       assert.deepEqual({ width, height }, BRICK);
-      assert(x >= 0 && x + width <= WIDTH && y >= 0 && y + height < PADDLE.y);
+      assert(x >= wallGap && x + width <= WIDTH - wallGap);
+      assert(y >= 0 && y + height < PADDLE.y);
       assert(!game.bricks.slice(index + 1).some((other) =>
         x < other.x + other.width && other.x < x + width
         && y < other.y + other.height && other.y < y + height));
@@ -154,7 +157,8 @@ test('widening the court preserves the run and moves the side walls', () => {
   assert.equal(game.score, 30);
   assert.equal(game.timeLeft, timeBeforeResize);
   assert.equal(brick.active, false);
-  assert.equal(brick.x, originalX + 150);
+  assert.equal(brick.x, originalX * (1100 / WIDTH));
+  assert.equal(brick.width, BRICK.width * (1100 / WIDTH));
   assert.equal(game.guards[1].x, 550);
 
   const [ball] = game.balls;
@@ -164,8 +168,30 @@ test('widening the court preserves the run and moves the side walls', () => {
   assert(ball.vx < 0);
 
   game.resize(WIDTH, HEIGHT);
-  assert.equal(brick.x, originalX);
+  assert(Math.abs(brick.x - originalX) < 1e-9);
+  assert.equal(brick.width, BRICK.width);
   assert(ball.x <= WIDTH - BALL_RADIUS);
+});
+
+test('bricks in a newly selected wide layout collide at their extended edge', () => {
+  const game = new Game(() => {});
+  game.resize(1200, HEIGHT);
+  game.reset(2);
+  game.action();
+  const brick = game.bricks.find(({ kind }) => kind === 'standard');
+  game.bricks = [brick];
+  game.remaining = 1;
+  assert.equal(brick.width, BRICK.width * 1.5);
+
+  Object.assign(game.balls[0], {
+    x: brick.x + brick.width - 1,
+    y: brick.y + brick.height + BALL_RADIUS + 1,
+    vx: 0,
+    vy: -450,
+  });
+  game.update(1 / 120);
+  assert.equal(brick.active, false);
+  assert.equal(game.phase, 'level-clear');
 });
 
 test('changing court height keeps the paddle and its collisions aligned', () => {
@@ -719,12 +745,12 @@ test('each raised barrier segment stops one upward attack without scoring or blo
   const count = game.remaining;
   const [ball] = game.balls;
   const left = BARRIER.width / 2;
-  Object.assign(ball, { x: left, y: BARRIER.y - 9, vx: 0, vy: 450 });
+  Object.assign(ball, { x: left, y: game.barrierY - 9, vx: 0, vy: 450 });
   game.update(0.075);
-  assert(ball.y > BARRIER.y + BARRIER.height && ball.vy > 0);
+  assert(ball.y > game.barrierY + BARRIER.height && ball.vy > 0);
   assert.equal(game.barriers.length, 3);
 
-  const underBarrier = BARRIER.y + BARRIER.height + BALL_RADIUS + 1;
+  const underBarrier = game.barrierY + BARRIER.height + BALL_RADIUS + 1;
   Object.assign(ball, { x: left, y: underBarrier, vy: -450 });
   game.update(1 / 120);
   assert(ball.vy > 0);

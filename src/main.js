@@ -912,8 +912,11 @@ async function init() {
     const scale = Math.min(width / WIDTH, height / HEIGHT);
     const courtWidth = Math.round(width / scale);
     const courtHeight = Math.round(height / scale);
+    const bricksChangedWidth = courtWidth !== game.width;
     if (game.resize(courtWidth, courtHeight)) {
-      for (const [brick, view] of brickViews) view.position.set(brick.x, brick.y);
+      if (bricksChangedWidth) {
+        for (const [brick, view] of brickViews) drawBrick(brick, view);
+      }
       field.style.setProperty('--layout-bottom', `${game.layoutBottom / game.height * 100}%`);
       sparks = [];
       blasts = [];

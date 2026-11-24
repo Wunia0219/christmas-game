@@ -1,6 +1,6 @@
 export const WIDTH = 800;
 export const HEIGHT = 480;
-export const BRICK = { width: 42, height: 16 };
+export const BRICK = { width: 48.4, height: 19 };
 export const LIVES = 3;
 export const ROUND_SECONDS = 90;
 export const TIME_BONUS_RATE = 20;
@@ -15,33 +15,37 @@ export const BUFF_DURATION = 12;
 export const SHRINK_DURATION = 5;
 export const BUFFS = ['wide', 'fast', 'guards', 'cannons'];
 
+// The letter coordinates were laid out with 42 × 16 bricks.
+const BRICK_SCALE_X = BRICK.width / 42;
+const BRICK_SCALE_Y = BRICK.height / 16;
+
 // Each position is [x, y, standardOnly].
 const giraffeLetters = [
   [ // G
     [21, 0], [65, 0], [7, 19], [83, 19], [0, 38], [0, 57], [0, 76],
-    [44, 76], [88, 76], [0, 95], [88, 95], [7, 114], [81, 114],
+    [43, 76], [86, 76], [0, 95], [86, 95], [7, 114], [81, 114],
     [21, 133], [65, 133],
   ],
   [ // i
     [0, 21, true], [0, 57], [0, 76], [0, 95], [0, 114], [0, 133],
   ],
   [ // r
-    [3, 57], [47, 61, true], [0, 76], [0, 95], [0, 114], [0, 133],
+    [1, 57], [44, 61, true], [0, 76], [0, 95], [0, 114], [0, 133],
   ],
   [ // a
-    [14, 57], [58, 57], [65, 76, true], [11, 95], [55, 95],
-    [0, 114], [65, 114], [8, 133], [65, 133],
+    [14, 57], [58, 57], [60, 76, true], [11, 95], [55, 95],
+    [0, 114], [60, 114], [8, 133], [60, 133],
   ],
   [ // f
-    [29, 0, true], [16, 19], [11, 38], [0, 57], [44, 57, true],
+    [29, 0, true], [16, 19], [11, 38], [0, 57], [43, 57, true],
     [11, 76], [11, 95], [11, 114], [11, 133],
   ],
   [ // f
-    [29, 0, true], [16, 19], [11, 38], [0, 57], [44, 57, true],
+    [29, 0, true], [16, 19], [11, 38], [0, 57], [43, 57, true],
     [11, 76], [11, 95], [11, 114], [11, 133],
   ],
   [ // e
-    [12, 57, true], [56, 57, true], [0, 76], [63, 76], [0, 95], [44, 95],
+    [12, 57, true], [56, 57, true], [0, 76], [58, 76], [0, 95], [44, 95],
     [0, 114], [12, 133], [56, 133],
   ],
 ];
@@ -107,10 +111,10 @@ function wordSlots(letters, spacing, top) {
   let left = 0;
   const slots = letters.flatMap((positions, index) => {
     const glyph = positions.map(([x, y, standardOnly]) => ({
-      x: left + x, y: top + y, ...BRICK, cell: index, standardOnly,
+      x: left + x * BRICK_SCALE_X, y: top + y * BRICK_SCALE_Y, ...BRICK, cell: index, standardOnly,
     }));
     const right = Math.max(...glyph.map(({ x, width }) => x + width));
-    left = right + (spacing[index] ?? 0);
+    left = right + (spacing[index] ?? 0) * BRICK_SCALE_X;
     return glyph;
   });
   return centerSlots(slots).sort((a, b) => a.y - b.y || a.x - b.x);
@@ -124,14 +128,15 @@ const skyBlue = [0x93caff, 0x527fbd];
 const layouts = [
   {
     name: 'Xmas',
-    slots: wordSlots(xmasLetters, [24, 24, 24], 53),
+    slots: wordSlots(xmasLetters, [37, 37, 37], 53),
     clearBonus: 1000,
     specials: draftSpecials,
     palette: [christmasRed, christmasGreen, christmasGold, christmasRed],
   },
   {
     name: 'Giraffe',
-    slots: wordSlots(giraffeLetters, [11, 10, 13, 13, 15, 13], 60),
+    // The a fits closer to the r because their widest rows sit at different heights.
+    slots: wordSlots(giraffeLetters, [7, 7, -7, 7, 7, 7], 60),
     clearBonus: 1500,
     specials: draftSpecials,
     palette: [
@@ -142,7 +147,7 @@ const layouts = [
   },
   {
     name: '十方　五甲',
-    slots: wordSlots(charityCharacters, [22, 54, 22], 53),
+    slots: wordSlots(charityCharacters, [9, 24, 9], 53),
     clearBonus: 2000,
     specials: 'BBBB????HHHIITTSPW',
     palette: [christmasGold, christmasGold, skyBlue, skyBlue],
@@ -169,7 +174,7 @@ const SEPARATION = 0.01;
 const CLOCK_EPSILON = 1e-9;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-function makeBricks(level, inset) {
+function makeBricks(level, widthScale) {
   const { slots, palette, specials } = layouts[level - 1];
   const shuffleCount = slots.filter(({ standardOnly }) => !standardOnly).length;
   const kinds = [...specials.padEnd(shuffleCount, '#')];
@@ -182,7 +187,8 @@ function makeBricks(level, inset) {
     const kind = standardOnly ? 'standard' : BRICK_KINDS[kinds.pop()] ?? 'standard';
     return {
       ...bounds,
-      x: bounds.x + inset,
+      x: bounds.x * widthScale,
+      width: bounds.width * widthScale,
       kind,
       paint: palette?.[cell],
       hitsLeft: kind === 'hard' ? 3 : 1,
@@ -192,10 +198,11 @@ function makeBricks(level, inset) {
   });
 }
 
-function areBrickNeighbors(a, b) {
+function areBrickNeighbors(a, b, widthScale) {
   const gapX = Math.max(a.x - b.x - b.width, b.x - a.x - a.width);
   const gapY = Math.max(a.y - b.y - b.height, b.y - a.y - a.height);
-  return gapX <= SHIELD_NEIGHBOR_GAP && gapY <= SHIELD_NEIGHBOR_GAP;
+  return gapX <= SHIELD_NEIGHBOR_GAP * BRICK_SCALE_X * widthScale
+    && gapY <= SHIELD_NEIGHBOR_GAP * BRICK_SCALE_Y;
 }
 
 function brickContact(projectile, brick, radius = BALL_RADIUS) {
@@ -244,34 +251,36 @@ export class Game {
   }
 
   resize(width, height) {
-    const shiftX = (width - this.width) / 2;
+    if (width === this.width && height === this.height) return false;
+    const widthRatio = width / this.width;
     const shiftY = height - this.height;
-    if (!shiftX && !shiftY) return false;
 
-    // Keep the brick layout intact and move the bottom of the court with the paddle.
+    // Fit the letter layout to the court width and keep the paddle near the bottom.
     const upper = this.barrierY + BARRIER.height + BALL_RADIUS;
     const lower = this.paddleY - BALL_RADIUS;
     const moveY = (y) => y + shiftY * clamp((y - upper) / (lower - upper), 0, 1);
-    for (const brick of this.bricks) brick.x += shiftX;
+    for (const brick of this.bricks) {
+      brick.x *= widthRatio;
+      brick.width *= widthRatio;
+    }
     for (const ball of this.balls) {
-      ball.x = clamp(ball.x + shiftX, BALL_RADIUS, width - BALL_RADIUS);
+      ball.x = clamp(ball.x * widthRatio, BALL_RADIUS, width - BALL_RADIUS);
       ball.y = moveY(ball.y);
     }
     for (const drop of this.drops) {
-      drop.x += shiftX;
+      drop.x *= widthRatio;
       drop.y = moveY(drop.y);
     }
     for (const shot of this.shots) {
-      shot.x = clamp(shot.x + shiftX, CANNON.shotRadius, width - CANNON.shotRadius);
+      shot.x = clamp(shot.x * widthRatio, CANNON.shotRadius, width - CANNON.shotRadius);
       shot.y = moveY(shot.y);
     }
-    const widthRatio = width / this.width;
     for (const guard of this.guards) guard.x *= widthRatio;
     for (const barrier of this.barriers) barrier.x *= widthRatio;
 
     this.width = width;
     this.height = height;
-    this.paddleX = this.clampPaddleX(this.paddleX + shiftX);
+    this.paddleX = this.clampPaddleX(this.paddleX * widthRatio);
     if (this.phase === 'ready' || this.phase === 'serve' || this.pausedFrom === 'serve') this.stageBall();
     return true;
   }
@@ -289,7 +298,7 @@ export class Game {
   }
 
   loadLevel(phase) {
-    this.bricks = makeBricks(this.level, (this.width - WIDTH) / 2);
+    this.bricks = makeBricks(this.level, this.width / WIDTH);
     this.layoutBottom = Math.max(...this.bricks.map(({ y, height }) => y + height));
     this.barrierY = Math.max(BARRIER.y, this.layoutBottom + 10);
     this.remaining = this.bricks.length;
@@ -719,7 +728,7 @@ export class Game {
     const y = source.y + source.height / 2;
     const distance = (target) => Math.hypot(target.x + target.width / 2 - x, target.y + target.height / 2 - y);
     const neighbors = this.bricks.filter((target) => target.active && !target.shielded && target.detonatesAt === undefined
-      && areBrickNeighbors(source, target));
+      && areBrickNeighbors(source, target, this.width / WIDTH));
     neighbors.sort((a, b) => distance(a) - distance(b));
     for (const target of neighbors.slice(0, 2)) {
       target.shielded = true;
