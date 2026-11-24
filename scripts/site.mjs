@@ -8,6 +8,8 @@ const files = new Map([
   ['src/style.css', 'src/style.css'],
   ['src/main.js', 'src/main.js'],
   ['src/game.js', 'src/game.js'],
+  ['src/art.js', 'src/art.js'],
+  ['assets/christmas-forest.webp', 'assets/christmas-forest.webp'],
   ['vendor/pixi.mjs', 'node_modules/pixi.js/dist/pixi.min.mjs'],
   ['vendor/archivo-black.woff2', 'node_modules/@fontsource/archivo-black/files/archivo-black-latin-400-normal.woff2'],
   ['vendor/space-mono.woff2', 'node_modules/@fontsource/space-mono/files/space-mono-latin-400-normal.woff2'],
@@ -23,6 +25,7 @@ const types = {
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.woff2': 'font/woff2',
+  '.webp': 'image/webp',
   '.txt': 'text/plain; charset=utf-8',
 };
 

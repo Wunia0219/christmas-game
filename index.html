@@ -41,11 +41,15 @@
           <div class="art-slot logo-slot"></div>
           <div id="field" class="field" tabindex="0" aria-label="遊戲畫面" aria-describedby="controls">
             <div class="arcade-hud" role="group" aria-label="本局資訊">
-              <output class="score-number" id="score" aria-live="off" aria-label="本局分數">00000</output>
+              <output class="score-number" id="score" aria-live="off" aria-label="本局分數">
+                <span class="sr-only" id="score-value">00000</span>
+                <canvas id="score-pixels" width="33" height="7" aria-hidden="true"></canvas>
+              </output>
               <div class="hearts" id="lives" role="img" aria-label="剩下 3 條命">
                 <i class="heart" aria-hidden="true"></i><i class="heart" aria-hidden="true"></i><i class="heart" aria-hidden="true"></i>
               </div>
             </div>
+            <div class="score-popups" id="score-popups" aria-hidden="true"></div>
             <div class="canvas-layer" id="canvas-layer" aria-hidden="true"></div>
             <div class="life-loss-flash" id="life-loss-flash" aria-hidden="true" hidden></div>
             <div class="overlay" id="overlay">
@@ -59,7 +63,6 @@
                 </button>
               </div>
             </div>
-            <div class="score-popups" id="score-popups" aria-hidden="true"></div>
           </div>
           <div class="art-slot mascot-slot"></div>
         </div>
@@ -95,11 +98,11 @@
           <h3>特殊磚塊</h3>
           <ul class="brick-legend">
             <li><i class="brick-mark extra-ball-mark" aria-hidden="true"></i><span><strong>多球磚</strong>擊破後放出 3 顆球</span></li>
-            <li><i class="brick-mark buff-mark" aria-hidden="true">?</i><span><strong>道具磚</strong>接住掉落道具可強化</span></li>
+            <li><i class="brick-mark buff-mark" aria-hidden="true">?</i><span><strong>道具磚</strong>接住掉落的禮物可強化</span></li>
             <li><i class="brick-mark hard-mark" aria-hidden="true">Ⅲ</i><span><strong>硬磚</strong>需擊中 3 次</span></li>
             <li><i class="brick-mark invisible-mark" aria-hidden="true"></i><span><strong>透明磚</strong>球穿過後顯形</span></li>
             <li><i class="brick-mark tnt-mark" aria-hidden="true">TNT</i><span><strong>TNT</strong>擊中後延時爆炸</span></li>
-            <li><i class="brick-mark shrink-mark" aria-hidden="true">›‹</i><span><strong>縮板磚</strong>掉落會縮短球拍的道具</span></li>
+            <li><i class="brick-mark shrink-mark" aria-hidden="true">›‹</i><span><strong>縮板磚</strong>接到掉落的炸彈會暫時縮短球拍</span></li>
             <li><i class="brick-mark shield-mark" aria-hidden="true"></i><span><strong>護盾磚</strong>擊破後為鄰磚加護盾</span></li>
             <li><i class="brick-mark barrier-mark" aria-hidden="true">▪▪▪</i><span><strong>攔截磚</strong>擊破後擋住向上攻擊</span></li>
           </ul>

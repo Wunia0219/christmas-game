@@ -121,10 +121,10 @@ function wordSlots(letters, spacing, top) {
 }
 
 const draftSpecials = 'BBB???HHHIITTSPW';
-const christmasRed = [0xff8b83, 0xb54960];
-const christmasGreen = [0x91dbad, 0x458568];
-const christmasGold = [0xffdc82, 0xb8893f];
-const skyBlue = [0x93caff, 0x527fbd];
+const christmasRed = [0xc1515c, 0x722e3d];
+const christmasGreen = [0x629773, 0x315b48];
+const christmasGold = [0xca9d58, 0x765130];
+const warmIvory = [0xdac6a0, 0x786451];
 const layouts = [
   {
     name: 'Xmas',
@@ -139,18 +139,14 @@ const layouts = [
     slots: wordSlots(giraffeLetters, [7, 7, -7, 7, 7, 7], 60),
     clearBonus: 1500,
     specials: draftSpecials,
-    palette: [
-      [0xff8b83, 0xb54960], [0xffad71, 0xb86146], [0xffca69, 0xb88740],
-      [0xffe17e, 0xb89146], [0x99e6bf, 0x488e7c], skyBlue,
-      [0xc5adff, 0x7d60b5],
-    ],
+    palette: [christmasRed, christmasGold, christmasGreen, warmIvory, christmasRed, christmasGold, christmasGreen],
   },
   {
     name: '十方　五甲',
     slots: wordSlots(charityCharacters, [9, 24, 9], 53),
     clearBonus: 2000,
     specials: 'BBBB????HHHIITTSPW',
-    palette: [christmasGold, christmasGold, skyBlue, skyBlue],
+    palette: [christmasGold, christmasGold, christmasGreen, christmasGreen],
   },
 ];
 

@@ -1,5 +1,6 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import { BALL_RADIUS, BARRIER, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
+import { BALL_RADIUS, BARRIER, BUFFS, CANNON, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
+import { assist, brickColor, drawBall, drawBrick, drawDrop, drawPaddle, drawRail, drawScore, drawShot, drawSpark, durabilityPip, makeCannon } from './art.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -14,6 +15,8 @@ const helpButton = byId('help');
 const helpDialog = byId('help-dialog');
 const fullscreenButton = byId('fullscreen');
 const score = byId('score');
+const scoreValue = byId('score-value');
+const scorePixels = byId('score-pixels');
 const clock = byId('time-left');
 const levelBonus = byId('level-bonus');
 const timeBonus = byId('time-bonus');
@@ -25,18 +28,6 @@ const announcement = byId('announcement');
 const hearts = [...lives.children];
 
 const scoreKey = 'arkanoid.best';
-const hues = [0xfd798f, 0xffa069, 0xffd86b, 0x70dfcd, 0xa895ff];
-const shadows = [0xb04369, 0xb85840, 0xb88947, 0x358b86, 0x6d52b5];
-const powerColors = {
-  'extra-ball': 0x8ef0ed, buff: 0xffa6d1, hard: 0xd5def5, tnt: 0xff786d,
-  shrink: 0xffaa82, shield: 0x8eafff, barrier: 0xd0a6fc,
-};
-const powerShadows = {
-  'extra-ball': 0x398985, buff: 0xaa397b, hard: 0x637492, tnt: 0xa2344d,
-  shrink: 0xa6504e, shield: 0x5266b5, barrier: 0x8052a3,
-};
-const shieldColor = 0xc1f0ff;
-const hardColors = [0xa5afc7, 0xbdcce9, powerColors.hard];
 const blastDuration = 0.28;
 const shakeDuration = 0.18;
 const sparkDuration = 0.28;
@@ -45,7 +36,6 @@ const ballFlashDuration = 0.26;
 const paddleImpactDuration = 0.18;
 const multiballScoreLift = 34;
 const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護', cannons: '雙側砲台' };
-const dark = 0x252142;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const number = (value, digits) => String(value).padStart(digits, '0');
 
@@ -154,120 +144,6 @@ function playSound(event) {
   tone.stop(now + duration);
 }
 
-function drawPowerMark(graphic, kind, x, y) {
-  if (kind === 'extra-ball') {
-    graphic.circle(x - 8, y, 2.5).circle(x, y, 2.5).circle(x + 8, y, 2.5).fill(dark);
-    return;
-  }
-  if (kind === 'shrink') {
-    graphic.moveTo(x - 8, y - 4).lineTo(x - 3, y).lineTo(x - 8, y + 4)
-      .moveTo(x + 8, y - 4).lineTo(x + 3, y).lineTo(x + 8, y + 4)
-      .stroke({ color: dark, width: 2, cap: 'round', join: 'round' });
-    return;
-  }
-  if (kind === 'shield') {
-    graphic.poly([x - 5, y - 4, x, y - 5, x + 5, y - 4, x + 4, y + 2, x, y + 6, x - 4, y + 2]).fill(dark);
-    return;
-  }
-  if (kind === 'barrier') {
-    for (const offset of [-7, 0, 7]) graphic.roundRect(x + offset - 2.5, y - 2, 5, 4, 1);
-    graphic.fill(dark);
-    return;
-  }
-  graphic.moveTo(x - 3, y - 3).lineTo(x - 2, y - 5).lineTo(x + 2, y - 5)
-    .lineTo(x + 4, y - 3).lineTo(x + 4, y - 1).lineTo(x, y + 1).lineTo(x, y + 2)
-    .stroke({ color: dark, width: 2, cap: 'round', join: 'round' })
-    .circle(x, y + 5, 1.15).fill(dark);
-}
-
-function drawBrick(brick, graphic = new Graphics()) {
-  const { width, height, kind, paint } = brick;
-  graphic.clear();
-  graphic.position.set(brick.x, brick.y);
-  graphic.visible = brick.active;
-  if (!graphic.visible) return graphic;
-
-  if (kind === 'invisible' && paint) {
-    graphic.roundRect(0.8, 0.8, width - 1.6, height - 1.6, 2)
-      .fill({ color: paint[0], alpha: 0.22 }).stroke({ color: paint[0], alpha: 0.72, width: 1.3 });
-  } else if (kind === 'invisible') {
-    for (let x = 5; x + 7 <= width - 5; x += 12) {
-      graphic.moveTo(x, 1.5).lineTo(x + 7, 1.5)
-        .moveTo(x, height - 1.5).lineTo(x + 7, height - 1.5);
-    }
-    for (const x of [1.5, width - 1.5]) {
-      graphic.moveTo(x, 5).lineTo(x, 9).moveTo(x, height - 9).lineTo(x, height - 5);
-    }
-    graphic.stroke({ color: 0xe3d5ff, alpha: 0.85, width: 2.4, cap: 'round' });
-  } else {
-    drawSolidBrick(graphic, brick);
-  }
-
-  if (brick.shielded) {
-    graphic.roundRect(0.5, 0.5, width - 1, height - 1, 4)
-      .stroke({ color: shieldColor, width: 2.5 })
-      .roundRect(width - 8, 6, 5, 10, 2).fill(shieldColor);
-  }
-  return graphic;
-}
-
-function brickMarkScale({ width, height }) {
-  return Math.min(1, (width - 2) / 30, (height - 2) / 13);
-}
-
-function drawDurabilityPip(graphic, x, y, index, color, alpha, scale) {
-  graphic.roundRect(x + (-13 + index * 9) * scale, y - scale, 7 * scale, 5 * scale, 1.5 * scale)
-    .fill({ color, alpha });
-}
-
-function drawSolidBrick(graphic, brick) {
-  const { width, height, row, kind, paint } = brick;
-  let color = paint?.[0] ?? powerColors[kind] ?? hues[row];
-  if (kind === 'hard' && !paint) color = hardColors[brick.hitsLeft - 1];
-  const armed = kind === 'tnt' && brick.detonatesAt !== undefined;
-  if (armed) color = 0xffcf73;
-  const depth = Math.min(4, height / 4);
-  const corner = Math.min(3, height / 4);
-  const inset = Math.min(4, height / 3);
-  const gloss = Math.min(2, height / 6);
-  const faceHeight = height - depth;
-  graphic
-    .roundRect(0, depth * 0.75, width, height, corner).fill(0x0b0a1b)
-    .roundRect(0, 0, width, height, corner).fill(paint?.[1] ?? powerShadows[kind] ?? shadows[row])
-    .roundRect(0, 0, width, faceHeight, corner).fill(color)
-    .rect(inset, depth * 0.75, width - inset * 2, gloss).fill({ color: 0xffffff, alpha: 0.38 })
-    .rect(inset, depth * 0.75 + gloss * 2, gloss, gloss).fill({ color: 0xffffff, alpha: 0.45 });
-
-  const x = width / 2;
-  const y = faceHeight / 2;
-  const scale = brickMarkScale(brick);
-  if (paint && kind !== 'standard' && kind !== 'tnt') {
-    const badgeColor = kind === 'hard' ? hardColors[brick.hitsLeft - 1] : powerColors[kind];
-    graphic.roundRect(x - 14 * scale, y - 6 * scale, 28 * scale, 13 * scale, 3 * scale)
-      .fill({ color: badgeColor, alpha: 0.9 });
-  }
-  if (kind === 'hard') {
-    for (let index = 0; index < 3; index += 1) {
-      drawDurabilityPip(graphic, x, y, index, dark, index < brick.hitsLeft ? 1 : 0.22, scale);
-    }
-  } else if (kind === 'tnt') {
-    graphic.save().setTransform(scale, 0, 0, scale, x, y);
-    graphic.roundRect(-15, -4, 30, 12, 3).fill(dark);
-    for (const letterX of [-8, 8]) {
-      graphic.moveTo(letterX - 2, -1).lineTo(letterX + 2, -1)
-        .moveTo(letterX, -1).lineTo(letterX, 5);
-    }
-    graphic.moveTo(-2, 5).lineTo(-2, -1).lineTo(2, 5).lineTo(2, -1)
-      .stroke({ color: 0xfff4dd, width: 1.4, cap: 'round', join: 'round' });
-    graphic.restore();
-    if (armed) graphic.star(Math.min(x + 22, width - 4), y + 2 * scale, 4, 5 * scale, 1.6 * scale).fill(0xfff4dd);
-  } else if (kind !== 'standard') {
-    graphic.save().setTransform(scale, 0, 0, scale, x, y);
-    drawPowerMark(graphic, kind, 0, 0);
-    graphic.restore();
-  }
-}
-
 function showScorePopup({ width, height }, points, x, y) {
   const popup = document.createElement('span');
   popup.className = 'brick-score';
@@ -291,7 +167,7 @@ function burstShield(sparks, brick) {
       vx: dx * (62 + index % 3 * 34),
       vy: dy * (55 + index % 3 * 34),
       life: sparkDuration,
-      color: index % 2 === 0 ? shieldColor : 0x7ab7ff,
+      color: index % 2 === 0 ? assist.ice : 0x5599d7,
       shardX: dx * (4 + index % 3),
       shardY: dy * (4 + index % 3),
     });
@@ -304,7 +180,7 @@ async function init() {
     width: WIDTH,
     height: HEIGHT,
     backgroundAlpha: 0,
-    antialias: true,
+    antialias: false,
     resolution: Math.min(devicePixelRatio, 2),
     preference: ['webgl', 'canvas'],
   });
@@ -313,17 +189,8 @@ async function init() {
   const bricks = new Container();
   const trail = new Graphics();
   const particles = new Graphics();
-  const paddle = new Graphics()
-    .roundRect(-PADDLE.width / 2, 3, PADDLE.width, PADDLE.height + 1, 4).fill(0x0c091b)
-    .roundRect(-PADDLE.width / 2, 0, PADDLE.width, PADDLE.height, 4).fill(0x9179ec)
-    .roundRect(-PADDLE.width / 2, 0, PADDLE.width, PADDLE.height - 4, 4).fill(0xdaceff)
-    .rect(-PADDLE.width / 2 + 9, 2, PADDLE.width - 18, 2).fill(0xf4eeff);
-  const leftCannon = new Graphics()
-    .roundRect(-5, 0, 10, 16, 2).fill(0x0c091b)
-    .roundRect(-3, 1, 6, 12, 1).fill(0xffa6d1)
-    .rect(-2, 1, 4, 3).fill(0xffecf7)
-    .roundRect(-8, 9, 16, 8, 2).fill(0xaa397b)
-    .roundRect(-8, 9, 16, 5, 2).fill(0xffa6d1);
+  const paddle = new Graphics();
+  const leftCannon = makeCannon();
   const rightCannon = leftCannon.clone();
   const balls = new Graphics();
   const powerUps = new Graphics();
@@ -337,6 +204,7 @@ async function init() {
   const ballFlashes = new Map();
   let blastOffset = '';
   let scoringBlast = false;
+  let paddleAppearance;
   let paddleImpacts = [];
   let lifeLoss;
   let heartPulse;
@@ -395,7 +263,7 @@ async function init() {
             vx: (Math.random() - 0.5) * 180,
             vy: (Math.random() - 0.5) * 150,
             life: sparkDuration,
-            color: brick.paint?.[0] ?? powerColors[brick.kind] ?? hues[brick.row],
+            color: brickColor(brick),
           });
         }
       }
@@ -422,10 +290,10 @@ async function init() {
 
     heartPulse?.cancel();
     const frames = reduced
-      ? [{ backgroundColor: '#a73450' }, { backgroundColor: 'var(--empty-heart)' }]
+      ? [{ backgroundColor: 'var(--heart-hit)' }, { backgroundColor: 'var(--empty-heart)' }]
       : [
-          { transform: 'scale(1)', backgroundColor: '#f8647f' },
-          { transform: 'scale(.58)', backgroundColor: '#a73450', offset: 0.47 },
+          { transform: 'scale(1)', backgroundColor: 'var(--heart-full)' },
+          { transform: 'scale(.58)', backgroundColor: 'var(--heart-hit)', offset: 0.47 },
           { transform: 'scale(1)', backgroundColor: 'var(--empty-heart)' },
         ];
     heartPulse = hearts[game.lives].animate(frames, { duration: duration * 1000, easing: 'ease-out' });
@@ -472,7 +340,9 @@ async function init() {
     }
 
     if (displayedScore !== game.score) {
-      score.textContent = number(game.score, 5);
+      const display = number(game.score, 5);
+      scoreValue.textContent = display;
+      drawScore(scorePixels, display);
       scorePulse?.cancel();
       if (game.score > displayedScore && !reducedMotion.matches) {
         scorePulse = score.animate([
@@ -538,6 +408,14 @@ async function init() {
   const rightKeys = ['ArrowRight', 'KeyD'];
 
   function renderPaddle() {
+    const shrunk = game.effectTimeLeft('shrink') > 0;
+    const boosted = BUFFS.some((kind) => game.effectTimeLeft(kind) > 0);
+    const appearance = shrunk ? 'shrink' : boosted ? 'buff' : 'standard';
+    if (appearance !== paddleAppearance) {
+      drawPaddle(paddle, appearance);
+      paddleAppearance = appearance;
+    }
+
     const reduced = reducedMotion.matches;
     const latest = paddleImpacts.at(-1);
     let stretch = 0;
@@ -563,10 +441,7 @@ async function init() {
       const progress = age / paddleImpactDuration;
       const alpha = 1 - progress ** 2;
       const radius = reduced ? 8 : 9 + 3 * Math.sin(progress * Math.PI);
-      paddleStars.circle(x, y, radius + 3).fill({ color: 0xffcf58, alpha: alpha * 0.2 })
-        .star(x, y, 4, radius, radius * 0.36)
-        .fill({ color: 0xffdf6b, alpha })
-        .stroke({ color: 0xfff6d8, width: 1, alpha });
+      drawSpark(paddleStars, x, y, radius, 0xffd48a, alpha);
     }
   }
 
@@ -590,57 +465,35 @@ async function init() {
     trail.clear();
     for (const ball of lifeLoss ? [] : game.balls) {
       const { x, y, vx, vy, bonus } = ball;
-      const color = bonus ? powerColors['extra-ball'] : 0xffe27a;
+      const color = bonus ? 0xffcb70 : 0xfff2cf;
       const flashLife = ballFlashes.get(ball);
       if (flashLife) {
         const fade = flashLife / ballFlashDuration;
         const alpha = Math.min(1, (1 - fade) * 6 + 0.55) * fade;
         const radius = BALL_RADIUS + (reducedMotion.matches ? 5 : 3 + (1 - fade) * 9);
-        balls.circle(x, y, radius).fill({ color: 0x8ffcff, alpha: alpha * 0.28 })
-          .stroke({ color: 0xe5ffff, width: 1.8, alpha });
+        drawSpark(balls, x, y, radius, 0xffd48a, alpha);
       }
-      balls.circle(x, y, BALL_RADIUS + 5).fill({ color, alpha: 0.2 })
-        .circle(x, y, BALL_RADIUS).fill(color)
-        .circle(x - 2, y - 2, 2.2).fill(0xfffcf0);
+      drawBall(balls, x, y, bonus);
       if (reducedMotion.matches || game.phase !== 'playing') continue;
       for (let index = 3; index >= 1; index -= 1) {
-        trail.circle(x - vx * index * 0.013, y - vy * index * 0.013, 6 - index)
-          .fill({ color, alpha: 0.36 / index });
+        const size = 5 - index;
+        trail.rect(x - vx * index * 0.018 - size / 2, y - vy * index * 0.018 - size / 2, size, size)
+          .fill({ color, alpha: 0.32 / index });
       }
     }
 
     powerUps.clear();
-    for (const { x, y } of game.shots) {
-      const radius = CANNON.shotRadius;
-      powerUps.roundRect(x - radius, y - radius, radius * 2, 13, radius).fill(0xffa6d1)
-        .roundRect(x - 1, y - 2, 2, 7, 1).fill(0xffecf7);
-    }
+    for (const { x, y } of game.shots) drawShot(powerUps, x, y);
     for (const { x, y, kind = 'buff' } of game.drops) {
-      const radius = DROP_RADIUS;
-      powerUps.poly([x, y - radius, x + radius, y, x, y + radius, x - radius, y])
-        .fill(powerColors[kind]).stroke({ color: kind === 'shrink' ? 0xfff2e5 : 0xffdcf5, width: 1.5 });
-      drawPowerMark(powerUps, kind, x, y);
+      drawDrop(powerUps, x, y, kind);
     }
     const guardWarning = expiryWarning(game.effectTimeLeft('guards'));
     for (const { x } of game.guards) {
-      const left = x - GUARD.width / 2;
-      powerUps.roundRect(left, game.guardY, GUARD.width, GUARD.height, 3).fill(powerShadows['extra-ball'])
-        .roundRect(left, game.guardY, GUARD.width, GUARD.height - 3, 3).fill(powerColors['extra-ball']);
-      if (guardWarning > 0) {
-        powerUps.roundRect(left, game.guardY, GUARD.width, GUARD.height - 3, 3)
-          .fill({ color: 0xfff6dc, alpha: guardWarning });
-      }
+      drawRail(powerUps, x - GUARD.width / 2, game.guardY, GUARD.width, GUARD.height, 'guard', guardWarning);
     }
     const barrierWarning = expiryWarning(game.effectTimeLeft('barrier'));
-    const barrierY = game.barrierY;
     for (const { x } of game.barriers) {
-      const width = game.barrierWidth - 4;
-      powerUps.roundRect(x + 2, barrierY, width, BARRIER.height, 3).fill(powerShadows.barrier)
-        .roundRect(x + 2, barrierY + 3, width, BARRIER.height - 3, 3).fill(powerColors.barrier);
-      if (barrierWarning > 0) {
-        powerUps.roundRect(x + 2, barrierY + 3, width, BARRIER.height - 3, 3)
-          .fill({ color: 0xfff6dc, alpha: barrierWarning });
-      }
+      drawRail(powerUps, x + 2, game.barrierY, game.barrierWidth - 4, BARRIER.height, 'barrier', barrierWarning);
     }
   }
 
@@ -679,9 +532,8 @@ async function init() {
       flash.life -= seconds;
       const { brick, life, index } = flash;
       if (!brick.active || life <= 0) continue;
-      const faceHeight = brick.height - Math.min(4, brick.height / 4);
-      drawDurabilityPip(particles, brick.x + brick.width / 2, brick.y + faceHeight / 2,
-        index, 0xf9fbff, Math.min(1, life / hardFlashDuration * 1.65), brickMarkScale(brick));
+      durabilityPip(particles, brick, index, 0xfff2cf,
+        Math.min(1, life / hardFlashDuration * 1.65), brick.x, brick.y);
     }
     durabilityFlashes = durabilityFlashes.filter(({ brick, life }) => brick.active && life > 0);
 
