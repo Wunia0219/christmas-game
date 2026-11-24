@@ -60,7 +60,6 @@ const glyphs = {
     '.###...###...###...###.',
   ],
   buff: ['..###..', '.##.##.', '...##..', '...#...', '...#...', '.......', '...#...'],
-  shrink: ['#.....#', '##...##', '.##.##.', '##...##', '#.....#'],
   shield: ['.#####.', '#######', '##...##', '.##.##.', '..###..', '...#...'],
   barrier: ['##.##.##', '........', '########', '########'],
   tnt: ['###.#..#.###', '.#..##.#..#.', '.#..#.##..#.', '.#..#..#..#.'],
@@ -253,6 +252,11 @@ function drawBrickFace(graphic, brick, textures) {
   drawSnowCaps(graphic, width, snow);
   if (kind === 'standard') return;
 
+  if (kind === 'shrink') {
+    drawBomb(graphic, width / 2, height / 2, 2 / 3);
+    return;
+  }
+
   const buffMark = textures[SPRITE_TEXTURES.buffMark];
   if (kind === 'buff' && buffMark) {
     const size = Math.min(height - 5, 13);
@@ -303,14 +307,20 @@ export function drawShot(graphic, x, y) {
     .rect(x - 1, y - radius, 2, 9).fill(assist.ice);
 }
 
+function drawBomb(graphic, x, y, scale = 1) {
+  graphic.save().setTransform(scale, 0, 0, scale, x, y);
+  graphic.rect(-2, -7, 4, 4).rect(1, -9, 5, 3).fill(0xc27a5d)
+    .rect(5, -9, 6, 2).rect(7, -11, 2, 6).fill(0xffa365)
+    .rect(7, -9, 2, 2).fill(cream);
+  glyph(graphic, bombBody, -1, 3, 2, 0xffba91);
+  pixelPanel(graphic, -8, -2, 14, 10, 2, 0x30292e);
+  graphic.rect(-6, 0, 4, 2).rect(-7, 2, 2, 2).fill(0xc89490);
+  graphic.restore();
+}
+
 export function drawDrop(graphic, x, y, kind) {
   if (kind === 'shrink') {
-    graphic.rect(x - 2, y - 7, 4, 4).rect(x + 1, y - 9, 5, 3).fill(0xc27a5d)
-      .rect(x + 5, y - 9, 6, 2).rect(x + 7, y - 11, 2, 6).fill(0xffa365)
-      .rect(x + 7, y - 9, 2, 2).fill(cream);
-    glyph(graphic, bombBody, x - 1, y + 3, 2, 0xffba91);
-    pixelPanel(graphic, x - 8, y - 2, 14, 10, 2, 0x30292e);
-    graphic.rect(x - 6, y, 4, 2).rect(x - 7, y + 2, 2, 2).fill(0xc89490);
+    drawBomb(graphic, x, y);
     return;
   }
 
@@ -323,6 +333,40 @@ export function drawDrop(graphic, x, y, kind) {
     .rect(x - 7, y - 10, 5, 4).rect(x + 2, y - 10, 5, 4).fill(gold)
     .rect(x - 4, y - 8, 8, 3).fill(0xe39c52)
     .rect(x - 2, y - 7, 4, 3).fill(cream);
+}
+
+const giftSparkles = [
+  [0, -16, -5, 20, 7, gold],
+  [0.08, 16, 5, 22, 7, 0xffdf8d],
+  [0.03, -12, -6, 28, 2, 0xffba60],
+  [0.15, 13, 7, 30, 3, gold],
+  [0.21, -14, -5, 24, 3, gold],
+  [0.25, 12, 6, 27, 2, 0xffba60],
+];
+const giftSparkleCycle = 0.34;
+
+export function drawGiftSparkles(graphic, x, y, age, reduced) {
+  if (reduced) {
+    graphic.rect(Math.round(x) - 15, Math.round(y) - 5, 3, 3)
+      .rect(Math.round(x) + 13, Math.round(y) - 8, 3, 3).fill(gold);
+    return;
+  }
+
+  // Small stars peel away from the box and fade above it as it falls.
+  for (const [delay, offset, drift, lift, size, color] of giftSparkles) {
+    if (age < delay) continue;
+    const progress = ((age - delay) % giftSparkleCycle) / giftSparkleCycle;
+    const alpha = Math.min(1, 0.7 + progress * 5) * (1 - progress) ** 0.85;
+    const px = Math.round(x + offset + drift * progress);
+    const py = Math.round(y - 4 - lift * progress);
+    if (size === 7) {
+      graphic.rect(px - 3, py, 7, 1)
+        .rect(px, py - 3, 1, 3).rect(px, py + 1, 1, 3).fill({ color, alpha })
+        .rect(px - 1, py - 1, 3, 3).fill({ color: cream, alpha });
+    } else {
+      graphic.rect(px, py, size, size).fill({ color, alpha });
+    }
+  }
 }
 
 export function drawBall(graphic, x, y, bonus, textures) {

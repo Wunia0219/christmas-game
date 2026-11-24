@@ -1,6 +1,6 @@
 import { Application, Container, Graphics } from 'pixi.js';
 import { BALL_RADIUS, BARRIER, CANNON, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
-import { assist, bonusBallColor, brickColor, drawBall, drawBrick, drawDrop, drawHardCrack, drawPaddleImpact, drawRail, drawScore, drawShot, drawSpark, loadGameTextures, makeCannon, makePaddle } from './art.js';
+import { assist, bonusBallColor, brickColor, drawBall, drawBrick, drawDrop, drawGiftSparkles, drawHardCrack, drawPaddleImpact, drawRail, drawScore, drawShot, drawSpark, loadGameTextures, makeCannon, makePaddle } from './art.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -190,19 +190,21 @@ async function init() {
   const bricks = new Container();
   const trail = new Graphics();
   const particles = new Graphics();
+  const dropSparkles = new Graphics();
   const { paddle, body: paddleBody } = makePaddle();
   const leftCannon = makeCannon();
   const rightCannon = leftCannon.clone();
   const balls = new Graphics();
   const powerUps = new Graphics();
   const paddleStars = new Graphics();
-  app.stage.addChild(bricks, trail, particles, powerUps, paddle, leftCannon, rightCannon, paddleStars, balls);
+  app.stage.addChild(bricks, trail, particles, dropSparkles, powerUps, paddle, leftCannon, rightCannon, paddleStars, balls);
 
   let brickViews = new Map();
   let sparks = [];
   let blasts = [];
   let durabilityFlashes = [];
   const ballFlashes = new Map();
+  const giftDropStartedAt = new WeakMap();
   let blastOffset = '';
   let scoringBlast = false;
   let paddleImpacts = [];
@@ -464,9 +466,16 @@ async function init() {
       }
     }
 
+    dropSparkles.clear();
     powerUps.clear();
     for (const { x, y } of game.shots) drawShot(powerUps, x, y);
-    for (const { x, y, kind = 'buff' } of game.drops) {
+    for (const drop of game.drops) {
+      const { x, y, kind = 'buff' } = drop;
+      if (kind === 'buff') {
+        const startedAt = giftDropStartedAt.get(drop) ?? game.playTime;
+        giftDropStartedAt.set(drop, startedAt);
+        drawGiftSparkles(dropSparkles, x, y, game.playTime - startedAt, reducedMotion.matches);
+      }
       drawDrop(powerUps, x, y, kind);
     }
     const guardWarning = expiryWarning(game.effectTimeLeft('guards'));
