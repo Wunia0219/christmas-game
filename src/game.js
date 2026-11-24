@@ -137,6 +137,11 @@ export const BRICK_TEXTURES = {
   terracotta: 'assets/bricks/terracotta-bare.webp',
   plum: 'assets/bricks/plum-bare.webp',
 };
+export const SPRITE_TEXTURES = {
+  buffMark: 'assets/sprites/buff-mark.webp',
+  mainBall: 'assets/sprites/main-ball.webp',
+  bonusBall: 'assets/sprites/bonus-ball.webp',
+};
 const layouts = [
   {
     name: 'Xmas',

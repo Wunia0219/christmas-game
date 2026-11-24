@@ -1,5 +1,5 @@
 import { Assets, Graphics } from 'pixi.js';
-import { BALL_RADIUS, BRICK_PALETTES, BRICK_TEXTURES, CANNON, DROP_RADIUS, PADDLE } from './game.js';
+import { BALL_RADIUS, BRICK_PALETTES, BRICK_TEXTURES, CANNON, DROP_RADIUS, PADDLE, SPRITE_TEXTURES } from './game.js';
 
 const ink = 0x111b20;
 const cream = 0xfff2cf;
@@ -9,8 +9,8 @@ const pine = 0x236047;
 
 const paddlePalette = { face: 0xba4d53, edge: 0xd99279, shadow: burgundy };
 
-export async function loadBrickTextures() {
-  const files = Object.values(BRICK_TEXTURES).map((path) => ({
+export async function loadGameTextures() {
+  const files = [...Object.values(BRICK_TEXTURES), ...Object.values(SPRITE_TEXTURES)].map((path) => ({
     alias: path,
     src: new URL(`../${path}`, import.meta.url).href,
     data: { scaleMode: 'nearest' },
@@ -18,7 +18,7 @@ export async function loadBrickTextures() {
   try {
     return await Assets.load(files);
   } catch (error) {
-    console.warn('Could not load Christmas brick textures. Using solid brick colors.', error);
+    console.warn('Could not load Christmas textures. Using the drawn artwork.', error);
     return {};
   }
 }
@@ -150,7 +150,7 @@ export function drawBrick(brick, textures, graphic = new Graphics()) {
   if (brick.kind === 'invisible') {
     drawConcealedBrick(graphic, brick.width, brick.height);
   } else {
-    drawBrickFace(graphic, brick, textures[BRICK_TEXTURES[brick.paint]]);
+    drawBrickFace(graphic, brick, textures);
   }
   if (brick.shielded) drawShieldCover(graphic, brick.width, brick.height);
   return graphic;
@@ -186,7 +186,7 @@ function drawSnowCaps(graphic, width, style) {
   }
 }
 
-function drawBrickFace(graphic, brick, texture) {
+function drawBrickFace(graphic, brick, textures) {
   const { width, height, kind, paint, snow } = brick;
   const color = brickColor(brick);
   const shadow = BRICK_PALETTES[paint]?.shadow ?? pine;
@@ -207,6 +207,7 @@ function drawBrickFace(graphic, brick, texture) {
     return;
   }
 
+  const texture = textures[BRICK_TEXTURES[paint]];
   if (texture) {
     // Keep the face opaque when a texture has translucent pixels inside the bevel.
     graphic.rect(4, 5, width - 8, height - 9).fill(color)
@@ -223,6 +224,13 @@ function drawBrickFace(graphic, brick, texture) {
   }
   drawSnowCaps(graphic, width, snow);
   if (kind === 'standard') return;
+
+  const buffMark = textures[SPRITE_TEXTURES.buffMark];
+  if (kind === 'buff' && buffMark) {
+    const size = Math.min(height - 5, 13);
+    graphic.rect((width - size) / 2, height * 0.59 - size / 2, size, size).fill({ texture: buffMark });
+    return;
+  }
 
   const scale = Math.min(1, width / 31, height / 17);
   glyph(graphic, glyphs[kind], width / 2, height * 0.55,
@@ -287,9 +295,14 @@ export function drawDrop(graphic, x, y, kind) {
     .rect(x - 2, y - 7, 4, 3).fill(cream);
 }
 
-export function drawBall(graphic, x, y, bonus) {
+export function drawBall(graphic, x, y, bonus, textures) {
   const radius = BALL_RADIUS;
   const size = radius * 2;
+  const texture = textures[bonus ? SPRITE_TEXTURES.bonusBall : SPRITE_TEXTURES.mainBall];
+  if (texture) {
+    graphic.rect(x - radius, y - radius, size, size).fill({ texture });
+    return;
+  }
   pixelPanel(graphic, x - radius, y - radius, size, size, 4, ink);
   pixelPanel(graphic, x - radius + 1, y - radius + 1, size - 2, size - 2, 3, bonus ? gold : cream);
   graphic.rect(x - 3, y + 4, 6, 2).rect(x + 3, y + 2, 2, 2).fill(bonus ? 0xb75b36 : 0xb9ab91)

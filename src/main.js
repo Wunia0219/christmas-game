@@ -1,6 +1,6 @@
 import { Application, Container, Graphics } from 'pixi.js';
 import { BALL_RADIUS, BARRIER, CANNON, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
-import { assist, brickColor, drawBall, drawBrick, drawDrop, drawHardCrack, drawRail, drawScore, drawShot, drawSpark, loadBrickTextures, makeCannon, makePaddle } from './art.js';
+import { assist, brickColor, drawBall, drawBrick, drawDrop, drawHardCrack, drawRail, drawScore, drawShot, drawSpark, loadGameTextures, makeCannon, makePaddle } from './art.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -185,7 +185,7 @@ async function init() {
     preference: ['webgl', 'canvas'],
   });
   byId('canvas-layer').appendChild(app.canvas);
-  const brickTextures = await loadBrickTextures();
+  const textures = await loadGameTextures();
 
   const bricks = new Container();
   const trail = new Graphics();
@@ -243,7 +243,7 @@ async function init() {
     if (brick) {
       const view = brickViews.get(brick);
       if (brick.active) {
-        drawBrick(brick, brickTextures, view);
+        drawBrick(brick, textures, view);
         if (event === 'brick-damage') {
           durabilityFlashes.push({ brick, life: hardFlashDuration });
         }
@@ -322,7 +322,7 @@ async function init() {
     let levelChanged = false;
     if (displayedBricks !== game.bricks) {
       for (const old of bricks.removeChildren()) old.destroy();
-      brickViews = new Map(game.bricks.map((brick) => [brick, bricks.addChild(drawBrick(brick, brickTextures))]));
+      brickViews = new Map(game.bricks.map((brick) => [brick, bricks.addChild(drawBrick(brick, textures))]));
       sparks = [];
       blasts = [];
       durabilityFlashes = [];
@@ -457,7 +457,7 @@ async function init() {
         const radius = BALL_RADIUS + (reducedMotion.matches ? 5 : 3 + (1 - fade) * 9);
         drawSpark(balls, x, y, radius, 0xffd48a, alpha);
       }
-      drawBall(balls, x, y, bonus);
+      drawBall(balls, x, y, bonus, textures);
       if (reducedMotion.matches || game.phase !== 'playing') continue;
       for (let index = 3; index >= 1; index -= 1) {
         const size = 5 - index;
@@ -678,7 +678,7 @@ async function init() {
     const bricksChangedWidth = courtWidth !== game.width;
     if (game.resize(courtWidth, courtHeight)) {
       if (bricksChangedWidth) {
-        for (const [brick, view] of brickViews) drawBrick(brick, brickTextures, view);
+        for (const [brick, view] of brickViews) drawBrick(brick, textures, view);
       }
       field.style.setProperty('--layout-bottom', `${game.layoutBottom / game.height * 100}%`);
       sparks = [];

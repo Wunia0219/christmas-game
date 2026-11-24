@@ -287,6 +287,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 4px; border: 1px soli
 .brick-legend li { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: .82rem; }
 .brick-legend strong { display: block; color: var(--paper); }
 .brick-mark { display: grid; flex: none; place-items: center; width: 27px; height: 17px; margin-top: 2px; color: #fff2cf; font: 700 .75rem/1 var(--mono); }
+.buff-brick-mark { object-fit: contain; image-rendering: pixelated; }
 .extra-ball-mark::before {
   content: '';
   width: 4px;
