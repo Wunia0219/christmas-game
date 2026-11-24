@@ -1,6 +1,6 @@
 import { Application, Container, Graphics } from 'pixi.js';
 import { BALL_RADIUS, BARRIER, CANNON, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
-import { assist, brickColor, drawBall, drawBrick, drawDrop, drawHardCrack, drawRail, drawScore, drawShot, drawSpark, loadGameTextures, makeCannon, makePaddle } from './art.js';
+import { assist, bonusBallColor, brickColor, drawBall, drawBrick, drawDrop, drawHardCrack, drawRail, drawScore, drawShot, drawSpark, loadGameTextures, makeCannon, makePaddle } from './art.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -449,7 +449,7 @@ async function init() {
     trail.clear();
     for (const ball of lifeLoss ? [] : game.balls) {
       const { x, y, vx, vy, bonus } = ball;
-      const color = bonus ? 0xffcb70 : 0xfff2cf;
+      const color = bonus ? bonusBallColor : 0xfff2cf;
       const flashLife = ballFlashes.get(ball);
       if (flashLife) {
         const fade = flashLife / ballFlashDuration;

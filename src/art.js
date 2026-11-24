@@ -6,6 +6,9 @@ const cream = 0xfff2cf;
 const gold = 0xffcb70;
 const burgundy = 0x7b263b;
 const pine = 0x236047;
+export const bonusBallColor = 0xffb36b;
+// Pixi multiplies the tint by the warm white in the shared ball texture.
+const bonusBallTint = 0xffc075;
 
 const paddlePalette = { face: 0xba4d53, edge: 0xd99279, shadow: burgundy };
 
@@ -228,12 +231,12 @@ function drawBrickFace(graphic, brick, textures) {
   const buffMark = textures[SPRITE_TEXTURES.buffMark];
   if (kind === 'buff' && buffMark) {
     const size = Math.min(height - 5, 13);
-    graphic.rect((width - size) / 2, height * 0.59 - size / 2, size, size).fill({ texture: buffMark });
+    graphic.rect((width - size) / 2, (height - size) / 2, size, size).fill({ texture: buffMark });
     return;
   }
 
   const scale = Math.min(1, width / 31, height / 17);
-  glyph(graphic, glyphs[kind], width / 2, height * 0.55,
+  glyph(graphic, glyphs[kind], width / 2, height * (kind === 'buff' ? 0.5 : 0.55),
     (kind === 'tnt' ? 1.65 : 1.45) * scale, brickIconColor(color));
 }
 
@@ -298,13 +301,13 @@ export function drawDrop(graphic, x, y, kind) {
 export function drawBall(graphic, x, y, bonus, textures) {
   const radius = BALL_RADIUS;
   const size = radius * 2;
-  const texture = textures[bonus ? SPRITE_TEXTURES.bonusBall : SPRITE_TEXTURES.mainBall];
+  const texture = textures[SPRITE_TEXTURES.mainBall];
   if (texture) {
-    graphic.rect(x - radius, y - radius, size, size).fill({ texture });
+    graphic.rect(x - radius, y - radius, size, size).fill({ texture, color: bonus ? bonusBallTint : 0xffffff });
     return;
   }
   pixelPanel(graphic, x - radius, y - radius, size, size, 4, ink);
-  pixelPanel(graphic, x - radius + 1, y - radius + 1, size - 2, size - 2, 3, bonus ? gold : cream);
+  pixelPanel(graphic, x - radius + 1, y - radius + 1, size - 2, size - 2, 3, bonus ? bonusBallColor : cream);
   graphic.rect(x - 3, y + 4, 6, 2).rect(x + 3, y + 2, 2, 2).fill(bonus ? 0xb75b36 : 0xb9ab91)
     .rect(x - 3, y - 4, 4, 2).rect(x - 4, y - 2, 2, 2).fill(0xfffefa);
 }

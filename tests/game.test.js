@@ -244,7 +244,7 @@ test('the round counts uncapped elapsed time after launch and resets on replay',
   assert.equal(game.score, 0);
 });
 
-test('the same countdown and lives carry through a missed ball and a level change', () => {
+test('the countdown runs after a miss and pauses until the next level launches', () => {
   const game = startGame();
   sendBallOut(game.balls[0]);
   game.update(0.01);
@@ -265,12 +265,16 @@ test('the same countdown and lives carry through a missed ball and a level chang
   game.hitBrick(lastBrick);
   assert.equal(game.phase, 'level-clear');
   const timeAtClear = game.timeLeft;
-  game.update(4);
+  game.update(0.04, { elapsedSeconds: timeAtClear + 4 });
+  assert.equal(game.phase, 'level-clear');
+  assert.equal(game.timeLeft, timeAtClear);
   game.action();
   assert.equal(game.phase, 'playing');
   assert.equal(game.level, 2);
   assert.equal(game.lives, LIVES - 1);
-  assert.equal(game.timeLeft, timeAtClear - 4);
+  assert.equal(game.timeLeft, timeAtClear);
+  game.update(0.02, { elapsedSeconds: 1 });
+  assert(Math.abs(game.timeLeft - (timeAtClear - 1)) < 1e-9);
 });
 
 test('a paddle arriving just after the ball crosses its top saves the ball', () => {

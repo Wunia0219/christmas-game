@@ -140,7 +140,6 @@ export const BRICK_TEXTURES = {
 export const SPRITE_TEXTURES = {
   buffMark: 'assets/sprites/buff-mark.webp',
   mainBall: 'assets/sprites/main-ball.webp',
-  bonusBall: 'assets/sprites/bonus-ball.webp',
 };
 const layouts = [
   {
@@ -362,7 +361,7 @@ export class Game {
   }
 
   get countdownRunning() {
-    return this.phase === 'playing' || this.phase === 'serve' || this.phase === 'level-clear';
+    return this.phase === 'playing' || this.phase === 'serve';
   }
 
   clampPaddleX(x) {
