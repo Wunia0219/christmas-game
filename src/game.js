@@ -125,12 +125,14 @@ const layouts = [
   {
     name: 'Xmas',
     slots: wordSlots(xmasLetters, [24, 24, 24], 53),
+    clearBonus: 1000,
     specials: draftSpecials,
     palette: [christmasRed, christmasGreen, christmasGold, christmasRed],
   },
   {
     name: 'Giraffe',
     slots: wordSlots(giraffeLetters, [11, 10, 13, 13, 15, 13], 60),
+    clearBonus: 1500,
     specials: draftSpecials,
     palette: [
       [0xff8b83, 0xb54960], [0xffad71, 0xb86146], [0xffca69, 0xb88740],
@@ -141,6 +143,7 @@ const layouts = [
   {
     name: '十方　五甲',
     slots: wordSlots(charityCharacters, [22, 54, 22], 53),
+    clearBonus: 2000,
     specials: 'BBBB????HHHIITTSPW',
     palette: [christmasGold, christmasGold, skyBlue, skyBlue],
   },
@@ -156,7 +159,6 @@ const BRICK_KINDS = {
 const INITIAL_SPEED = 365;
 const MAX_SPEED = 585;
 const PADDLE_SPEED = 700;
-const PADDLE_CONTACT_Y = PADDLE.y - BALL_RADIUS;
 const PADDLE_GRACE_TIME = 0.045;
 const PADDLE_GRACE_DEPTH = 18;
 const DROP_SPEED = 145;
@@ -167,7 +169,7 @@ const SEPARATION = 0.01;
 const CLOCK_EPSILON = 1e-9;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-function makeBricks(level) {
+function makeBricks(level, inset) {
   const { slots, palette, specials } = layouts[level - 1];
   const shuffleCount = slots.filter(({ standardOnly }) => !standardOnly).length;
   const kinds = [...specials.padEnd(shuffleCount, '#')];
@@ -180,6 +182,7 @@ function makeBricks(level) {
     const kind = standardOnly ? 'standard' : BRICK_KINDS[kinds.pop()] ?? 'standard';
     return {
       ...bounds,
+      x: bounds.x + inset,
       kind,
       paint: palette?.[cell],
       hitsLeft: kind === 'hard' ? 3 : 1,
@@ -215,8 +218,8 @@ function brickContact(projectile, brick, radius = BALL_RADIUS) {
   return { time, axis: enterX > enterY ? 'x' : 'y', brick, kind: 'brick' };
 }
 
-function paddleContactTime({ x, y, vx, vy }, paddleX, paddleVelocity, paddleWidth, radius) {
-  const crossing = (PADDLE.y - radius - y) / vy;
+function paddleContactTime({ x, y, vx, vy }, paddleX, paddleY, paddleVelocity, paddleWidth, radius) {
+  const crossing = (paddleY - radius - y) / vy;
   const start = Math.max(0, crossing);
   // Downward speed stays constant in this band, so depth also gives the time since crossing.
   const end = crossing + Math.min(PADDLE_GRACE_TIME, PADDLE_GRACE_DEPTH / vy);
@@ -235,7 +238,42 @@ function paddleContactTime({ x, y, vx, vy }, paddleX, paddleVelocity, paddleWidt
 export class Game {
   constructor(onEvent) {
     this.onEvent = onEvent;
+    this.width = WIDTH;
+    this.height = HEIGHT;
     this.reset();
+  }
+
+  resize(width, height) {
+    const shiftX = (width - this.width) / 2;
+    const shiftY = height - this.height;
+    if (!shiftX && !shiftY) return false;
+
+    // Keep the brick layout intact and move the bottom of the court with the paddle.
+    const upper = this.barrierY + BARRIER.height + BALL_RADIUS;
+    const lower = this.paddleY - BALL_RADIUS;
+    const moveY = (y) => y + shiftY * clamp((y - upper) / (lower - upper), 0, 1);
+    for (const brick of this.bricks) brick.x += shiftX;
+    for (const ball of this.balls) {
+      ball.x = clamp(ball.x + shiftX, BALL_RADIUS, width - BALL_RADIUS);
+      ball.y = moveY(ball.y);
+    }
+    for (const drop of this.drops) {
+      drop.x += shiftX;
+      drop.y = moveY(drop.y);
+    }
+    for (const shot of this.shots) {
+      shot.x = clamp(shot.x + shiftX, CANNON.shotRadius, width - CANNON.shotRadius);
+      shot.y = moveY(shot.y);
+    }
+    const widthRatio = width / this.width;
+    for (const guard of this.guards) guard.x *= widthRatio;
+    for (const barrier of this.barriers) barrier.x *= widthRatio;
+
+    this.width = width;
+    this.height = height;
+    this.paddleX = this.clampPaddleX(this.paddleX + shiftX);
+    if (this.phase === 'ready' || this.phase === 'serve' || this.pausedFrom === 'serve') this.stageBall();
+    return true;
   }
 
   reset(level = 1) {
@@ -251,13 +289,14 @@ export class Game {
   }
 
   loadLevel(phase) {
-    this.bricks = makeBricks(this.level);
+    this.bricks = makeBricks(this.level, (this.width - WIDTH) / 2);
     this.layoutBottom = Math.max(...this.bricks.map(({ y, height }) => y + height));
     this.barrierY = Math.max(BARRIER.y, this.layoutBottom + 10);
     this.remaining = this.bricks.length;
+    this.levelBonus = 0;
     this.playTime = 0;
     this.clearPowerUps();
-    this.paddleX = WIDTH / 2;
+    this.paddleX = this.width / 2;
     this.stageBall();
     this.phase = phase;
   }
@@ -271,12 +310,20 @@ export class Game {
   }
 
   stageBall() {
-    this.balls = [{ x: this.paddleX, y: PADDLE.y - BALL_RADIUS - 4, vx: 0, vy: 0 }];
+    this.balls = [{ x: this.paddleX, y: this.paddleY - BALL_RADIUS - 4, vx: 0, vy: 0 }];
   }
 
   effectTimeLeft(kind) {
     return Math.max(0, (this.effects[kind] ?? 0) - this.playTime);
   }
+
+  get paddleY() { return this.height - (HEIGHT - PADDLE.y); }
+
+  get cannonY() { return this.paddleY - (PADDLE.y - CANNON.muzzleY); }
+
+  get guardY() { return this.height - (HEIGHT - GUARD.y); }
+
+  get barrierWidth() { return this.width / 3; }
 
   get paddleWidth() {
     const width = PADDLE.width + (this.effectTimeLeft('wide') > 0 ? 64 : 0);
@@ -291,10 +338,14 @@ export class Game {
     return this.phase === 'playing' || this.phase === 'serve' || this.phase === 'level-clear';
   }
 
+  clampPaddleX(x) {
+    const half = this.paddleWidth / 2;
+    return clamp(x, half + 8, this.width - half - 8);
+  }
+
   movePaddle(x) {
     if (this.phase !== 'ready' && this.phase !== 'serve' && this.phase !== 'playing') return;
-    const half = this.paddleWidth / 2;
-    this.paddleX = clamp(x, half + 8, WIDTH - half - 8);
+    this.paddleX = this.clampPaddleX(x);
     if (this.phase !== 'playing') this.balls[0].x = this.paddleX;
   }
 
@@ -311,7 +362,7 @@ export class Game {
     }
 
     const speed = INITIAL_SPEED + (this.level - 1) * 32;
-    const direction = this.paddleX > WIDTH / 2 ? -1 : 1;
+    const direction = this.paddleX > this.width / 2 ? -1 : 1;
     const [ball] = this.balls;
     ball.vx = speed * 0.36 * direction;
     ball.vy = -Math.sqrt(speed ** 2 - ball.vx ** 2);
@@ -348,25 +399,25 @@ export class Game {
     };
 
     if (ball.vx !== 0) {
-      const wall = ball.vx < 0 ? BALL_RADIUS : WIDTH - BALL_RADIUS;
+      const wall = ball.vx < 0 ? BALL_RADIUS : this.width - BALL_RADIUS;
       consider({ time: (wall - ball.x) / ball.vx, axis: 'x', kind: 'wall' });
     }
     if (ball.vy < 0) {
       consider({ time: (BALL_RADIUS - ball.y) / ball.vy, axis: 'y', kind: 'wall' });
     }
     if (ball.vy > 0) {
-      const time = paddleContactTime(ball, paddleX, paddleVelocity, this.paddleWidth, BALL_RADIUS);
+      const time = paddleContactTime(ball, paddleX, this.paddleY, paddleVelocity, this.paddleWidth, BALL_RADIUS);
       if (time !== null) {
         consider({ time, axis: 'y', kind: 'paddle' });
       }
-      const guardTime = (GUARD.y - BALL_RADIUS - ball.y) / ball.vy;
+      const guardTime = (this.guardY - BALL_RADIUS - ball.y) / ball.vy;
       const guardX = ball.x + ball.vx * guardTime;
       for (const guard of this.guards) {
         if (Math.abs(guardX - guard.x) <= GUARD.width / 2 + BALL_RADIUS) {
           consider({ time: guardTime, axis: 'y', kind: 'guard', guard });
         }
       }
-      consider({ time: (HEIGHT + BALL_RADIUS - ball.y) / ball.vy, kind: 'miss' });
+      consider({ time: (this.height + BALL_RADIUS - ball.y) / ball.vy, kind: 'miss' });
     }
     consider(this.findAttackContact(ball, BALL_RADIUS, closest?.time ?? duration));
     return closest;
@@ -378,7 +429,7 @@ export class Game {
       const time = (this.barrierY + BARRIER.height + radius - projectile.y) / projectile.vy;
       if (time >= 0 && time <= duration) {
         const x = projectile.x + projectile.vx * time;
-        const barrier = this.barriers.find((segment) => x >= segment.x && x < segment.x + BARRIER.width);
+        const barrier = this.barriers.find((segment) => x >= segment.x && x < segment.x + this.barrierWidth);
         if (barrier) closest = { time, axis: 'y', kind: 'barrier-hit', barrier };
       }
     }
@@ -500,7 +551,8 @@ export class Game {
         if (dx * dx + dy * dy > TNT.radius ** 2) continue;
         this.hitBrick(target);
       }
-      this.onEvent('tnt-score', { x, y, points: this.score - scoreBeforeBlast - this.timeBonus });
+      const points = this.score - scoreBeforeBlast - this.levelBonus - this.timeBonus;
+      this.onEvent('tnt-score', { x, y, points });
       if (this.phase !== 'playing') return;
     }
   }
@@ -509,7 +561,7 @@ export class Game {
     for (let index = this.drops.length - 1; index >= 0; index -= 1) {
       const drop = this.drops[index];
       const falling = { x: drop.x, y: drop.y, vx: 0, vy: DROP_SPEED };
-      const time = paddleContactTime(falling, paddleStartX, paddleVelocity, this.paddleWidth, DROP_RADIUS);
+      const time = paddleContactTime(falling, paddleStartX, this.paddleY, paddleVelocity, this.paddleWidth, DROP_RADIUS);
       drop.y += DROP_SPEED * seconds;
       if (time !== null && time <= seconds) {
         this.drops.splice(index, 1);
@@ -519,7 +571,7 @@ export class Game {
         } else {
           this.activateBuff(BUFFS[Math.floor(Math.random() * BUFFS.length)]);
         }
-      } else if (drop.y > HEIGHT + DROP_RADIUS) {
+      } else if (drop.y > this.height + DROP_RADIUS) {
         this.drops.splice(index, 1);
       }
     }
@@ -529,7 +581,7 @@ export class Game {
     this.effects[kind] = this.playTime + BUFF_DURATION;
     if (kind === 'wide') this.movePaddle(this.paddleX);
     if (kind === 'guards') {
-      this.guards = [137, WIDTH / 2, WIDTH - 137].map((x) => ({ x }));
+      this.guards = [137, WIDTH / 2, WIDTH - 137].map((x) => ({ x: x * (this.width / WIDTH) }));
     }
     this.onEvent('buff', kind);
   }
@@ -556,11 +608,11 @@ export class Game {
       const speed = Math.min(MAX_SPEED, Math.hypot(ball.vx, ball.vy) + 4);
       ball.vx = Math.sin(angle) * speed;
       ball.vy = -Math.cos(angle) * speed;
-      ball.y = PADDLE_CONTACT_Y;
+      ball.y = this.paddleY - BALL_RADIUS;
       if (this.effectTimeLeft('cannons') > 0) {
         const offset = this.paddleWidth / 2 - CANNON.inset;
         for (const x of [paddleX - offset, paddleX + offset]) {
-          this.shots.push({ x, y: CANNON.muzzleY - CANNON.shotRadius, vx: 0, vy: -SHOT_SPEED });
+          this.shots.push({ x, y: this.cannonY - CANNON.shotRadius, vx: 0, vy: -SHOT_SPEED });
         }
       }
     } else if (contact.axis === 'x') {
@@ -584,7 +636,7 @@ export class Game {
     if (contact.kind === 'paddle') {
       const halfWidth = this.paddleWidth / 2;
       const x = clamp(ball.x, paddleX - halfWidth, paddleX + halfWidth);
-      this.onEvent('paddle', { x, y: PADDLE.y });
+      this.onEvent('paddle', { x, y: this.paddleY });
       return;
     }
     if (contact.kind === 'guard') {
@@ -629,6 +681,8 @@ export class Game {
     this.remaining -= 1;
     if (this.remaining === 0) {
       this.phase = this.level < LEVELS ? 'level-clear' : 'won';
+      this.levelBonus = layouts[this.level - 1].clearBonus;
+      this.score += this.levelBonus;
       if (this.phase === 'won' && this.startLevel === 1) {
         this.timeBonus = Math.floor(this.timeLeft + CLOCK_EPSILON) * TIME_BONUS_RATE;
         this.score += this.timeBonus;
@@ -642,7 +696,7 @@ export class Game {
     const x = brick.x + brick.width / 2;
     const y = brick.y + brick.height / 2;
     if (brick.kind === 'extra-ball') {
-      const direction = x < WIDTH / 2 ? 1 : -1;
+      const direction = x < this.width / 2 ? 1 : -1;
       const spawnedBalls = [[-15, -125], [0, 75], [15, 185]].map(([offset, speed]) => ({
         x: x + offset * direction, y, vx: speed * direction, vy: 310, bonus: true,
       }));
@@ -654,7 +708,7 @@ export class Game {
     if (brick.kind === 'shield') this.shieldAdjacentBricks(brick);
     if (brick.kind === 'barrier') {
       this.effects.barrier = this.playTime + BARRIER.duration;
-      this.barriers = [0, BARRIER.width, BARRIER.width * 2].map((left) => ({ x: left }));
+      this.barriers = [0, 1, 2].map((index) => ({ x: index * this.barrierWidth }));
       this.onEvent('barrier-raise');
     }
     this.onEvent('brick', brick);

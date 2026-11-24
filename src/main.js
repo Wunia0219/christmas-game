@@ -17,6 +17,7 @@ const helpDialog = byId('help-dialog');
 const fullscreenButton = byId('fullscreen');
 const score = byId('score');
 const clock = byId('time-left');
+const levelBonus = byId('level-bonus');
 const timeBonus = byId('time-bonus');
 const scorePopups = byId('score-popups');
 const best = byId('best');
@@ -278,12 +279,12 @@ function drawSolidBrick(graphic, brick) {
   }
 }
 
-function showScorePopup(points, x, y) {
+function showScorePopup({ width, height }, points, x, y) {
   const popup = document.createElement('span');
   popup.className = 'brick-score';
   popup.textContent = `+${points}`;
-  popup.style.left = `${x / WIDTH * 100}%`;
-  popup.style.top = `${y / HEIGHT * 100}%`;
+  popup.style.left = `${x / width * 100}%`;
+  popup.style.top = `${y / height * 100}%`;
   popup.addEventListener('animationend', () => popup.remove(), { once: true });
   scorePopups.append(popup);
 }
@@ -374,7 +375,7 @@ async function init() {
     }
     if (event === 'tnt-score') {
       scoringBlast = false;
-      showScorePopup(payload.points, payload.x, payload.y);
+      showScorePopup(game, payload.points, payload.x, payload.y);
       return;
     }
     if (event === 'extra-ball') {
@@ -395,7 +396,7 @@ async function init() {
       view.visible = false;
       if (!scoringBlast) {
         const lift = event === 'extra-ball' ? multiballScoreLift : 0;
-        showScorePopup(brick.points, brick.x + brick.width / 2, brick.y + brick.height / 2 - lift);
+        showScorePopup(game, brick.points, brick.x + brick.width / 2, brick.y + brick.height / 2 - lift);
       }
       if (!reducedMotion.matches) {
         for (let index = 0; index < 7; index += 1) {
@@ -428,7 +429,7 @@ async function init() {
     const reduced = reducedMotion.matches;
     const duration = reduced ? 0.17 : 0.28;
     lifeLoss = { duration, remaining: duration };
-    lifeLossFlash.style.left = `${x / WIDTH * 100}%`;
+    lifeLossFlash.style.left = `${x / game.width * 100}%`;
     lifeLossFlash.style.opacity = '1';
     lifeLossFlash.hidden = false;
 
@@ -503,7 +504,7 @@ async function init() {
       byId('level').textContent = number(game.level, 2);
       levelSelect.value = String(game.startLevel);
       progress.max = game.bricks.length;
-      field.style.setProperty('--layout-bottom', `${game.layoutBottom / HEIGHT * 100}%`);
+      field.style.setProperty('--layout-bottom', `${game.layoutBottom / game.height * 100}%`);
       levelChanged = true;
     }
 
@@ -562,6 +563,8 @@ async function init() {
     const detail = byId('detail');
     detail.hidden = phase !== 'won' && phase !== 'lost' && phase !== 'time-up';
     detail.textContent = detail.hidden ? '' : `最終分數 ${game.score.toLocaleString('zh-TW')}`;
+    levelBonus.hidden = phase !== 'level-clear' && phase !== 'won';
+    levelBonus.textContent = levelBonus.hidden ? '' : `通關獎分 +${game.levelBonus.toLocaleString('zh-TW')} 分`;
     timeBonus.hidden = !showTimeBonus;
     timeBonus.textContent = showTimeBonus ? `時間獎分 +${game.timeBonus.toLocaleString('zh-TW')} 分（剩餘 ${bonusSeconds} 秒）` : '';
     if (wasPlaying && document.activeElement === field && document.hasFocus()) {
@@ -592,14 +595,14 @@ async function init() {
         ? -0.34 * (1 - progress / 0.4) ** 2
         : 0.13 * Math.sin((progress - 0.4) / 0.6 * Math.PI);
     }
-    paddle.position.set(game.paddleX, PADDLE.y - PADDLE.height * stretch);
+    paddle.position.set(game.paddleX, game.paddleY - PADDLE.height * stretch);
     paddle.scale.set(game.paddleWidth / PADDLE.width * (1 - stretch * 0.16), 1 + stretch);
 
     leftCannon.visible = rightCannon.visible = game.effectTimeLeft('cannons') > 0;
     if (leftCannon.visible) {
       const offset = game.paddleWidth / 2 - CANNON.inset;
-      leftCannon.position.set(game.paddleX - offset, CANNON.muzzleY);
-      rightCannon.position.set(game.paddleX + offset, CANNON.muzzleY);
+      leftCannon.position.set(game.paddleX - offset, game.cannonY);
+      rightCannon.position.set(game.paddleX + offset, game.cannonY);
     }
 
     paddleStars.clear();
@@ -668,17 +671,17 @@ async function init() {
     const guardWarning = expiryWarning(game.effectTimeLeft('guards'));
     for (const { x } of game.guards) {
       const left = x - GUARD.width / 2;
-      powerUps.roundRect(left, GUARD.y, GUARD.width, GUARD.height, 3).fill(powerShadows['extra-ball'])
-        .roundRect(left, GUARD.y, GUARD.width, GUARD.height - 3, 3).fill(powerColors['extra-ball']);
+      powerUps.roundRect(left, game.guardY, GUARD.width, GUARD.height, 3).fill(powerShadows['extra-ball'])
+        .roundRect(left, game.guardY, GUARD.width, GUARD.height - 3, 3).fill(powerColors['extra-ball']);
       if (guardWarning > 0) {
-        powerUps.roundRect(left, GUARD.y, GUARD.width, GUARD.height - 3, 3)
+        powerUps.roundRect(left, game.guardY, GUARD.width, GUARD.height - 3, 3)
           .fill({ color: 0xfff6dc, alpha: guardWarning });
       }
     }
     const barrierWarning = expiryWarning(game.effectTimeLeft('barrier'));
     const barrierY = game.barrierY;
     for (const { x } of game.barriers) {
-      const width = BARRIER.width - 4;
+      const width = game.barrierWidth - 4;
       powerUps.roundRect(x + 2, barrierY, width, BARRIER.height, 3).fill(powerShadows.barrier)
         .roundRect(x + 2, barrierY + 3, width, BARRIER.height - 3, 3).fill(powerColors.barrier);
       if (barrierWarning > 0) {
@@ -813,7 +816,7 @@ async function init() {
   let gesture;
   function moveToPointer(event) {
     const bounds = field.getBoundingClientRect();
-    const x = (event.clientX - bounds.left) / bounds.width * WIDTH;
+    const x = (event.clientX - bounds.left) / bounds.width * game.width;
     if (game.phase === 'playing') pointerX = x;
     else game.movePaddle(x);
   }
@@ -902,6 +905,27 @@ async function init() {
   restartButton.disabled = false;
   soundButton.disabled = !(window.AudioContext || window.webkitAudioContext);
   syncHud();
+
+  new ResizeObserver(([{ contentRect: { width, height } }]) => {
+    if (!width || !height) return;
+    // Keep one scale for both axes while extending the court to fit the viewport.
+    const scale = Math.min(width / WIDTH, height / HEIGHT);
+    const courtWidth = Math.round(width / scale);
+    const courtHeight = Math.round(height / scale);
+    if (game.resize(courtWidth, courtHeight)) {
+      for (const [brick, view] of brickViews) view.position.set(brick.x, brick.y);
+      field.style.setProperty('--layout-bottom', `${game.layoutBottom / game.height * 100}%`);
+      sparks = [];
+      blasts = [];
+      paddleImpacts.length = 0;
+      scorePopups.replaceChildren();
+      pointerX = undefined;
+    }
+    app.renderer.resize(courtWidth, courtHeight, Math.min(devicePixelRatio, 2) * scale);
+    renderPlayfield();
+    renderBrickEffects(0);
+    app.render();
+  }).observe(field);
 }
 
 init().catch((error) => {

@@ -54,20 +54,25 @@
           </div>
         </header>
 
-        <div id="field" class="field" tabindex="0" aria-label="遊戲畫面" aria-describedby="controls">
-          <div class="canvas-layer" id="canvas-layer" aria-hidden="true"></div>
-          <div class="life-loss-flash" id="life-loss-flash" aria-hidden="true" hidden></div>
-          <div class="overlay" id="overlay">
-            <div class="overlay-content">
-              <h2 id="message">Xmas</h2>
-              <p id="detail" hidden></p>
-              <p id="time-bonus" class="time-bonus" hidden></p>
-              <button class="button primary-button" id="action" type="button" disabled>
-                <i class="play-icon" aria-hidden="true"></i><span id="action-label">載入中</span>
-              </button>
+        <div class="field-stage">
+          <div class="art-slot logo-slot"></div>
+          <div id="field" class="field" tabindex="0" aria-label="遊戲畫面" aria-describedby="controls">
+            <div class="canvas-layer" id="canvas-layer" aria-hidden="true"></div>
+            <div class="life-loss-flash" id="life-loss-flash" aria-hidden="true" hidden></div>
+            <div class="overlay" id="overlay">
+              <div class="overlay-content">
+                <h2 id="message">Xmas</h2>
+                <p id="detail" hidden></p>
+                <p id="level-bonus" class="bonus-score" hidden></p>
+                <p id="time-bonus" class="bonus-score" hidden></p>
+                <button class="button primary-button" id="action" type="button" disabled>
+                  <i class="play-icon" aria-hidden="true"></i><span id="action-label">載入中</span>
+                </button>
+              </div>
             </div>
+            <div class="score-popups" id="score-popups" aria-hidden="true"></div>
           </div>
-          <div class="score-popups" id="score-popups" aria-hidden="true"></div>
+          <div class="art-slot mascot-slot"></div>
         </div>
 
         <footer class="game-deck">
@@ -121,7 +126,7 @@
           </form>
         </header>
         <div class="help-content">
-          <p>用球拍接住球，打碎所有磚塊即可過關。每塊磚值 30 分，TNT 會一次顯示自己和炸碎磚塊的合計分數。</p>
+          <p>用球拍接住球，打碎所有磚塊即可過關。每塊磚值 30 分，第一、二、三關通關分別加 1,000、1,500、2,000 分。TNT 會一次顯示自己和炸碎磚塊的合計分數。</p>
           <p>一局有 90 秒和 3 條命。第一次發球後開始倒數，補發球和換關也會計時，暫停時倒數停止。從第一關打完三關，每剩下完整 1 秒加 20 分。</p>
           <h3>操作方式</h3>
           <dl class="control-guide">

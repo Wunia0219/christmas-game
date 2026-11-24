@@ -3,6 +3,7 @@ import test from 'node:test';
 import { BALL_RADIUS, BARRIER, BRICK, BUFFS, BUFF_DURATION, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, LIVES, PADDLE, ROUND_SECONDS, SHRINK_DURATION, TIME_BONUS_RATE, TNT, WIDTH } from '../src/game.js';
 
 const levelBrickCounts = [54, 63, 71];
+const levelClearBonuses = [1000, 1500, 2000];
 
 function startGame() {
   const game = new Game(() => {});
@@ -91,7 +92,7 @@ test('Giraffe keeps the dot and f caps ordinary, and a normal serve can clear th
   game.action();
   game.update(1.2);
   assert.equal(game.phase, 'level-clear');
-  assert.equal(game.score, 30);
+  assert.equal(game.score, 1530);
 });
 
 test('all layouts use equal rectangular collision areas and the last brick can be hit', () => {
@@ -116,7 +117,7 @@ test('all layouts use equal rectangular collision areas and the last brick can b
   game.action();
   hitBrick(game, lastBrick);
   assert.equal(game.phase, 'level-clear');
-  assert.equal(game.score, 30);
+  assert.equal(game.score, 1030);
 });
 
 test('a run can start at any level and replay from the selected level', () => {
@@ -137,6 +138,49 @@ test('a run can start at any level and replay from the selected level', () => {
   assert.equal(game.phase, 'playing');
   assert.equal(game.level, LEVELS);
   assert.equal(game.lives, LIVES);
+});
+
+test('widening the court preserves the run and moves the side walls', () => {
+  const game = startGame();
+  const brick = game.bricks.find(({ kind }) => kind === 'standard');
+  const originalX = brick.x;
+  game.hitBrick(brick);
+  game.activateBuff('guards');
+  game.update(0.01);
+  const timeBeforeResize = game.timeLeft;
+
+  game.resize(1100, HEIGHT);
+  assert.equal(game.phase, 'playing');
+  assert.equal(game.score, 30);
+  assert.equal(game.timeLeft, timeBeforeResize);
+  assert.equal(brick.active, false);
+  assert.equal(brick.x, originalX + 150);
+  assert.equal(game.guards[1].x, 550);
+
+  const [ball] = game.balls;
+  Object.assign(ball, { x: 1100 - BALL_RADIUS - 1, y: 350, vx: 400, vy: 0 });
+  game.update(0.01);
+  assert(ball.x > WIDTH);
+  assert(ball.vx < 0);
+
+  game.resize(WIDTH, HEIGHT);
+  assert.equal(brick.x, originalX);
+  assert(ball.x <= WIDTH - BALL_RADIUS);
+});
+
+test('changing court height keeps the paddle and its collisions aligned', () => {
+  const game = new Game(() => {});
+  game.resize(WIDTH, HEIGHT + 100);
+  assert.equal(game.balls[0].y, game.paddleY - BALL_RADIUS - 4);
+  game.action();
+  game.activateBuff('cannons');
+  const [ball] = game.balls;
+  Object.assign(ball, { x: game.paddleX, y: game.paddleY - BALL_RADIUS - 1, vx: 0, vy: 400 });
+
+  game.update(0.01);
+  assert(ball.vy < 0);
+  assert.equal(game.shots.length, 2);
+  assert(game.shots.every(({ y }) => y > CANNON.muzzleY));
 });
 
 test('the round counts uncapped elapsed time after launch, freezes on pause, and resets on replay', () => {
@@ -161,6 +205,7 @@ test('the round counts uncapped elapsed time after launch, freezes on pause, and
   assert.equal(game.timeLeft, 0);
   assert.equal(game.lives, LIVES);
   assert.equal(game.score, 30);
+  assert.equal(game.levelBonus, 0);
   assert.equal(game.timeBonus, 0);
   assert.equal(game.balls.length, 0);
   assert.equal(game.guards.length, 0);
@@ -462,7 +507,7 @@ test('each cannon shot stops at its first brick and triggers that brick’s effe
   bounceOffPaddle(game);
   game.update(0.4);
   assert.equal(game.phase, 'level-clear');
-  assert.equal(game.score, 120);
+  assert.equal(game.score, 1120);
   assert.equal(game.shots.length, 0);
   assert.equal(game.effectTimeLeft('cannons'), 0);
 });
@@ -562,7 +607,7 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
   }]);
 });
 
-test('a full clear awards 20 points per whole second and keeps the bonus out of the TNT popup', () => {
+test('a final TNT blast keeps both clear bonuses out of the brick popup', () => {
   for (const startLevel of [1, LEVELS]) {
     const blastScores = [];
     const game = new Game((event, payload) => {
@@ -585,11 +630,14 @@ test('a full clear awards 20 points per whole second and keeps the bonus out of 
     tnt.detonatesAt = 0;
 
     const scoreBeforeBlast = game.score;
+    assert.equal(scoreBeforeBlast, startLevel === 1 ? 2560 : 0);
     game.update(1 / 120);
 
     assert.equal(game.phase, 'won');
+    assert.equal(game.levelBonus, 2000);
     assert.equal(game.timeBonus, startLevel === 1 ? 12 * TIME_BONUS_RATE : 0);
-    assert.equal(game.score, scoreBeforeBlast + 60 + game.timeBonus);
+    const finalScore = scoreBeforeBlast + 60 + 2000 + game.timeBonus;
+    assert.equal(game.score, finalScore);
     assert.deepEqual(blastScores, [{
       x: tnt.x + tnt.width / 2,
       y: tnt.y + tnt.height / 2,
@@ -598,7 +646,7 @@ test('a full clear awards 20 points per whole second and keeps the bonus out of 
     const timeAtWin = game.timeLeft;
     game.update(20);
     assert.equal(game.timeLeft, timeAtWin);
-    assert.equal(game.score, scoreBeforeBlast + 60 + game.timeBonus);
+    assert.equal(game.score, finalScore);
   }
 });
 
@@ -764,6 +812,7 @@ test('losing the last ball, advancing a level, and restarting clear temporary ef
   for (let level = 1; level <= LEVELS; level += 1) {
     assert.equal(game.level, level);
     assert.equal(game.remaining, levelBrickCounts[level - 1]);
+    assert.equal(game.levelBonus, 0);
     game.activateBuff('guards');
     const expectedScore = game.score + game.bricks.reduce((sum, brick) => sum + brick.points, 0);
     for (const brick of [...game.bricks].reverse()) {
@@ -774,8 +823,9 @@ test('losing the last ball, advancing a level, and restarting clear temporary ef
     game.update(TNT.delay + 0.01);
     assert.equal(game.remaining, 0);
     const bonus = level === LEVELS ? Math.floor(game.timeLeft) * TIME_BONUS_RATE : 0;
+    assert.equal(game.levelBonus, levelClearBonuses[level - 1]);
     assert.equal(game.timeBonus, bonus);
-    assert.equal(game.score, expectedScore + bonus);
+    assert.equal(game.score, expectedScore + levelClearBonuses[level - 1] + bonus);
     assert.equal(game.phase, level < LEVELS ? 'level-clear' : 'won');
     assert.equal(game.guards.length, 0);
     assert.equal(game.barriers.length, 0);
@@ -786,6 +836,7 @@ test('losing the last ball, advancing a level, and restarting clear temporary ef
 
   game.reset();
   assert.equal(game.level, 1);
+  assert.equal(game.levelBonus, 0);
   assert.equal(game.balls.length, 1);
   assert.equal(game.lives, LIVES);
 });
