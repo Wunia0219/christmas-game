@@ -286,17 +286,26 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 4px; border: 1px soli
 .brick-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
 .brick-legend li { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font-size: .82rem; }
 .brick-legend strong { display: block; color: var(--paper); }
-.brick-mark { display: grid; flex: none; place-items: center; width: 27px; height: 17px; margin-top: 2px; border: 1px solid #566050; border-radius: 2px; background: #111b20; font: 700 .75rem/1 var(--mono); }
-.extra-ball-mark { color: #ffebb0; }
-.extra-ball-mark::before { content: ''; width: 4px; height: 4px; background: currentColor; box-shadow: -6px 0 currentColor, 6px 0 currentColor; }
-.buff-mark { color: #f6bf65; }
-.hard-mark { color: #eee4ce; }
-.invisible-mark { border: 2px dashed #fff2cf; background: transparent; }
-.tnt-mark { color: #ff8d88; font-size: .64rem; }
-.shrink-mark { color: #ff9d71; }
-.shield-mark { color: #e4dfd0; }
+.brick-mark { display: grid; flex: none; place-items: center; width: 27px; height: 17px; margin-top: 2px; color: #fff2cf; font: 700 .75rem/1 var(--mono); }
+.extra-ball-mark::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  translate: -7.5px 0;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 5px 0 currentColor, 10px 0 currentColor, 15px 0 currentColor;
+}
+.hard-mark::before {
+  content: '';
+  width: 23px;
+  height: 11px;
+  background: linear-gradient(#e9af9b 27%, #c1515c 27% 63%, #722e3d 63%);
+  clip-path: polygon(14% 0, 86% 0, 86% 14%, 94% 14%, 94% 29%, 100% 29%, 100% 71%, 94% 71%, 94% 86%, 86% 86%, 86% 100%, 14% 100%, 14% 86%, 6% 86%, 6% 71%, 0 71%, 0 29%, 6% 29%, 6% 14%, 14% 14%);
+}
+.invisible-mark::before { content: ''; width: 21px; height: 10px; border: 1.5px dashed currentColor; }
+.tnt-mark { font-size: .64rem; }
 .shield-mark::before { content: ''; width: 9px; height: 10px; background: currentColor; clip-path: polygon(50% 0, 100% 12%, 86% 64%, 50% 100%, 14% 64%, 0 12%); }
-.barrier-mark { color: #ecb990; }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 @container (max-width: 710px) {

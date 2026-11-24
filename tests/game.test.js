@@ -32,15 +32,15 @@ function bounceOffPaddle(game) {
   assert(ball.vy < 0);
 }
 
-test('each level shuffles brick types while keeping slots, counts, and 30 points per brick', (context) => {
+test('each level shuffles brick types and snow while keeping slots, colors, counts, and points', (context) => {
   let draw = 0;
   context.mock.method(Math, 'random', () => draw);
   const game = new Game(() => {});
   assert.deepEqual(LEVEL_NAMES, ['Xmas', 'Giraffe', '十方　五甲']);
   const expectedCounts = [
-    { standard: 38, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
-    { standard: 47, 'extra-ball': 3, buff: 3, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
-    { standard: 53, 'extra-ball': 4, buff: 4, hard: 3, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+    { standard: 35, 'extra-ball': 3, buff: 3, hard: 6, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+    { standard: 44, 'extra-ball': 3, buff: 3, hard: 6, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
+    { standard: 50, 'extra-ball': 4, buff: 4, hard: 6, invisible: 2, tnt: 2, shrink: 1, shield: 1, barrier: 1 },
   ];
 
   for (const [index, counts] of expectedCounts.entries()) {
@@ -50,16 +50,21 @@ test('each level shuffles brick types while keeping slots, counts, and 30 points
       game.loadLevel('ready');
       assert.equal(game.remaining, levelBrickCounts[index]);
       const actualCounts = {};
-      for (const { kind, hitsLeft, points } of game.bricks) {
+      const snowCounts = { bare: 0, double: 0, left: 0, right: 0 };
+      for (const { kind, hitsLeft, points, snow } of game.bricks) {
         actualCounts[kind] = (actualCounts[kind] ?? 0) + 1;
+        snowCounts[snow] += 1;
         assert.equal(points, 30);
-        assert.equal(hitsLeft, kind === 'hard' ? 3 : 1);
+        assert.equal(hitsLeft, kind === 'hard' ? 2 : 1);
       }
       assert.deepEqual(actualCounts, counts);
+      assert.deepEqual(Object.values(snowCounts), [0, 1, 2, 3]
+        .map((index) => Math.floor((game.bricks.length + 3 - index) / 4)));
       return game.bricks;
     });
-    assert.deepEqual(first.map(({ x, y }) => [x, y]), second.map(({ x, y }) => [x, y]));
+    assert.deepEqual(first.map(({ x, y, paint }) => [x, y, paint]), second.map(({ x, y, paint }) => [x, y, paint]));
     assert.notDeepEqual(first.map(({ kind }) => kind), second.map(({ kind }) => kind));
+    assert.notDeepEqual(first.map(({ snow }) => snow), second.map(({ snow }) => snow));
   }
 });
 
@@ -212,16 +217,17 @@ test('changing court height keeps the paddle and its collisions aligned', () => 
 test('the round counts uncapped elapsed time after launch and resets on replay', () => {
   const game = new Game(() => {});
   game.update(20);
-  assert.equal(game.timeLeft, ROUND_SECONDS);
+  assert.equal(game.timeLeft, 120);
 
   game.action();
   game.hitBrick(game.bricks.find(({ kind }) => kind === 'standard'));
   game.update(0.02, { elapsedSeconds: 12.5 });
-  assert(Math.abs(game.timeLeft - 77.5) < 1e-9);
+  const remaining = ROUND_SECONDS - 12.5;
+  assert(Math.abs(game.timeLeft - remaining) < 1e-9);
   game.action();
   assert.equal(game.phase, 'playing');
   game.activateBuff('guards');
-  game.update(0.02, { elapsedSeconds: 77.5 });
+  game.update(0.02, { elapsedSeconds: remaining });
   assert.equal(game.phase, 'time-up');
   assert.equal(game.timeLeft, 0);
   assert.equal(game.lives, LIVES);
@@ -324,7 +330,7 @@ test('paddle grace ends when too much time or distance has passed', () => {
   }
 });
 
-test('a multiball brick releases three extra balls, and only losing all balls costs a life', () => {
+test('a multiball brick releases four extra balls, and only losing all balls costs a life', () => {
   const releases = [];
   const misses = [];
   const game = new Game((event, brick, spawnedBalls) => {
@@ -342,14 +348,14 @@ test('a multiball brick releases three extra balls, and only losing all balls co
   assert.equal(brick.active, false);
   assert.equal(game.score, brick.points);
   assert.equal(game.remaining, before - 1);
-  assert.equal(game.balls.length, 4);
+  assert.equal(game.balls.length, 5);
   const [original, ...extras] = game.balls;
   assert.equal(releases.length, 1);
   assert.equal(releases[0].brick, brick);
   assert.equal(releases[0].spawnedBalls.length, extras.length);
   extras.forEach((ball, index) => assert.equal(releases[0].spawnedBalls[index], ball));
   assert(extras.every((ball) => ball.bonus && ball.vy > 0));
-  assert.equal(new Set(extras.map(({ vx }) => vx)).size, 3);
+  assert.equal(new Set(extras.map(({ vx }) => vx)).size, 4);
   const initialY = extras[0].y;
   sendBallOut(original);
   game.update(0.01);
@@ -517,7 +523,7 @@ test('each cannon shot stops at its first brick and triggers that brick’s effe
   }
   assert.equal(game.score, 90);
   assert.equal(game.remaining, 1);
-  assert.equal(game.balls.filter(({ bonus }) => bonus).length, 3);
+  assert.equal(game.balls.filter(({ bonus }) => bonus).length, 4);
   assert.deepEqual(events.filter((event) => event === 'brick' || event === 'extra-ball'), ['brick', 'brick', 'extra-ball']);
 
   game.movePaddle(game.paddleX + 150);
@@ -529,12 +535,12 @@ test('each cannon shot stops at its first brick and triggers that brick’s effe
   assert.equal(game.effectTimeLeft('cannons'), 0);
 });
 
-test('hard bricks bounce the ball on each hit and score only when the third hit breaks them', () => {
+test('hard bricks bounce the ball on both hits and score only when the second hit breaks them', () => {
   const game = startGame();
   const brick = game.bricks.find(({ kind }) => kind === 'hard');
   const count = game.remaining;
 
-  for (const hitsLeft of [2, 1, 0]) {
+  for (const hitsLeft of [1, 0]) {
     hitBrick(game, brick);
     assert(game.balls[0].vy > 0);
     assert.equal(brick.hitsLeft, hitsLeft);
@@ -577,7 +583,7 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
   const center = { ...game.bricks.find(({ kind }) => kind === 'tnt'), x: 260, y: 100, width: 65, height: 23 };
   const { x, y, width, height } = center;
   const standard = { ...center, kind: 'standard', x: x - 73, y: y - 31 };
-  const hard = { ...center, kind: 'hard', hitsLeft: 3, x: x + 73 };
+  const hard = { ...center, kind: 'hard', hitsLeft: 2, x: x + 73 };
   const invisible = { ...center, kind: 'invisible', x: x + 73, y: y + 31 };
   const buff = { ...center, kind: 'buff', y: y + 31 };
   const otherTnt = { ...center, y: y - 31 };
@@ -604,7 +610,8 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
   assert.equal(standard.active, false);
   assert.equal(buff.active, false);
   assert.equal(game.drops.length, 1);
-  assert.equal(hard.hitsLeft, 2);
+  assert.equal(hard.hitsLeft, 1);
+  assert(hard.active);
   assert.equal(invisible.kind, 'standard');
   assert(invisible.active && distant.active && otherTnt.active);
   assert(otherTnt.detonatesAt > game.playTime);
@@ -613,11 +620,12 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
 
   game.update(TNT.delay);
   assert.equal(otherTnt.active, false);
-  assert.equal(hard.hitsLeft, 1);
+  assert.equal(hard.hitsLeft, 0);
+  assert.equal(hard.active, false);
   assert(invisible.active && distant.active);
-  assert.equal(game.remaining, 3);
+  assert.equal(game.remaining, 2);
   assert.deepEqual(blastScores.slice(1), [{
-    x: otherTnt.x + width / 2, y: otherTnt.y + height / 2, points: 30,
+    x: otherTnt.x + width / 2, y: otherTnt.y + height / 2, points: 60,
   }]);
 });
 

@@ -2,7 +2,7 @@ export const WIDTH = 800;
 export const HEIGHT = 480;
 export const BRICK = { width: 48.4, height: 19 };
 export const LIVES = 3;
-export const ROUND_SECONDS = 90;
+export const ROUND_SECONDS = 120;
 export const TIME_BONUS_RATE = 20;
 export const BALL_RADIUS = 7;
 export const PADDLE = { width: 112, height: 13, y: 447 };
@@ -120,18 +120,30 @@ function wordSlots(letters, spacing, top) {
   return centerSlots(slots).sort((a, b) => a.y - b.y || a.x - b.x);
 }
 
-const draftSpecials = 'BBB???HHHIITTSPW';
-const christmasRed = [0xc1515c, 0x722e3d];
-const christmasGreen = [0x629773, 0x315b48];
-const christmasGold = [0xca9d58, 0x765130];
-const warmIvory = [0xdac6a0, 0x786451];
+const draftSpecials = 'BBB???HHHHHHIITTSPW';
+export const BRICK_PALETTES = {
+  cranberry: { face: 0xad5664, shadow: 0x521e28 },
+  gold: { face: 0xbe8c52, shadow: 0x5b3d20 },
+  almond: { face: 0xb59178, shadow: 0x49321d },
+  terracotta: { face: 0xce7950, shadow: 0x5b2617 },
+  plum: { face: 0xa5738d, shadow: 0x5b3145 },
+  pistachio: { face: 0xafbd78, shadow: 0x424a28 },
+};
+const snowStyles = ['bare', 'double', 'left', 'right'];
+export const BRICK_TEXTURES = {
+  cranberry: 'assets/bricks/cranberry-bare.webp',
+  gold: 'assets/bricks/gold-bare.webp',
+  almond: 'assets/bricks/almond-bare.webp',
+  terracotta: 'assets/bricks/terracotta-bare.webp',
+  plum: 'assets/bricks/plum-bare.webp',
+};
 const layouts = [
   {
     name: 'Xmas',
     slots: wordSlots(xmasLetters, [37, 37, 37], 53),
     clearBonus: 1000,
     specials: draftSpecials,
-    palette: [christmasRed, christmasGreen, christmasGold, christmasRed],
+    palette: ['cranberry', 'pistachio', 'gold', 'cranberry'],
   },
   {
     name: 'Giraffe',
@@ -139,14 +151,14 @@ const layouts = [
     slots: wordSlots(giraffeLetters, [7, 7, -7, 7, 7, 7], 60),
     clearBonus: 1500,
     specials: draftSpecials,
-    palette: [christmasRed, christmasGold, christmasGreen, warmIvory, christmasRed, christmasGold, christmasGreen],
+    palette: ['cranberry', 'gold', 'pistachio', 'almond', 'terracotta', 'plum', 'pistachio'],
   },
   {
     name: '十方　五甲',
     slots: wordSlots(charityCharacters, [9, 24, 9], 53),
     clearBonus: 2000,
-    specials: 'BBBB????HHHIITTSPW',
-    palette: [christmasGold, christmasGold, christmasGreen, christmasGreen],
+    specials: 'BBBB????HHHHHHIITTSPW',
+    palette: ['gold', 'gold', 'pistachio', 'pistachio'],
   },
 ];
 
@@ -170,16 +182,21 @@ const SEPARATION = 0.01;
 const CLOCK_EPSILON = 1e-9;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+function shuffle(items) {
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const other = Math.floor(Math.random() * (index + 1));
+    [items[index], items[other]] = [items[other], items[index]];
+  }
+  return items;
+}
+
 function makeBricks(level, widthScale) {
   const { slots, palette, specials } = layouts[level - 1];
   const shuffleCount = slots.filter(({ standardOnly }) => !standardOnly).length;
-  const kinds = [...specials.padEnd(shuffleCount, '#')];
-  for (let index = kinds.length - 1; index > 0; index -= 1) {
-    const other = Math.floor(Math.random() * (index + 1));
-    [kinds[index], kinds[other]] = [kinds[other], kinds[index]];
-  }
+  const kinds = shuffle([...specials.padEnd(shuffleCount, '#')]);
+  const snowBySlot = shuffle(slots.map((_, index) => snowStyles[index % snowStyles.length]));
 
-  return slots.map(({ cell, standardOnly, ...bounds }) => {
+  return slots.map(({ cell, standardOnly, ...bounds }, index) => {
     const kind = standardOnly ? 'standard' : BRICK_KINDS[kinds.pop()] ?? 'standard';
     return {
       ...bounds,
@@ -187,7 +204,8 @@ function makeBricks(level, widthScale) {
       width: bounds.width * widthScale,
       kind,
       paint: palette?.[cell],
-      hitsLeft: kind === 'hard' ? 3 : 1,
+      snow: snowBySlot[index],
+      hitsLeft: kind === 'hard' ? 2 : 1,
       points: 30,
       active: true,
     };
@@ -687,7 +705,7 @@ export class Game {
     const y = brick.y + brick.height / 2;
     if (brick.kind === 'extra-ball') {
       const direction = x < this.width / 2 ? 1 : -1;
-      const spawnedBalls = [[-15, -125], [0, 75], [15, 185]].map(([offset, speed]) => ({
+      const spawnedBalls = [[-15, -125], [0, 75], [15, 185], [-24, -230]].map(([offset, speed]) => ({
         x: x + offset * direction, y, vx: speed * direction, vy: 310, bonus: true,
       }));
       this.balls.push(...spawnedBalls);

@@ -1,5 +1,5 @@
-import { Graphics } from 'pixi.js';
-import { BALL_RADIUS, CANNON, DROP_RADIUS, PADDLE } from './game.js';
+import { Assets, Graphics } from 'pixi.js';
+import { BALL_RADIUS, BRICK_PALETTES, BRICK_TEXTURES, CANNON, DROP_RADIUS, PADDLE } from './game.js';
 
 const ink = 0x111b20;
 const cream = 0xfff2cf;
@@ -7,37 +7,66 @@ const gold = 0xffcb70;
 const burgundy = 0x7b263b;
 const pine = 0x236047;
 
-const paddlePalettes = {
-  standard: { face: 0xba4d53, edge: 0xd99279, shadow: burgundy },
-  buff: { face: 0x648c69, edge: 0xa3b388, shadow: 0x3e5947 },
-  shrink: { face: 0xb16e51, edge: 0xe0ac78, shadow: 0x744333 },
-};
+const paddlePalette = { face: 0xba4d53, edge: 0xd99279, shadow: burgundy };
+
+export async function loadBrickTextures() {
+  const files = Object.values(BRICK_TEXTURES).map((path) => ({
+    alias: path,
+    src: new URL(`../${path}`, import.meta.url).href,
+    data: { scaleMode: 'nearest' },
+  }));
+  try {
+    return await Assets.load(files);
+  } catch (error) {
+    console.warn('Could not load Christmas brick textures. Using solid brick colors.', error);
+    return {};
+  }
+}
 
 const bombBody = ['..#####..', '.#######.', '#########', '#########', '#########', '.#######.', '..#####..'];
 
 export const assist = {
   ice: 0x9cf3ff,
   blue: 0x194b71,
-  violet: 0xc6b4ff,
   plum: 0x402c6a,
 };
 
-const brickFaces = {
-  'extra-ball': 0xffebb0,
-  buff: 0xf6bf65,
-  tnt: 0xe45754,
-  shrink: 0xff9d71,
-  shield: 0xe4dfd0,
-  barrier: 0xecb990,
+const railPalettes = {
+  guard: { face: 0x407b88, edge: 0x8fd5dc, shadow: assist.blue },
+  barrier: { face: 0x79679e, edge: 0xbca7dc, shadow: assist.plum },
 };
-const hardFaces = [0x9f998a, 0xc8c0ad, 0xeee4ce];
+
 const glyphs = {
-  'extra-ball': ['...........', '##..###..##', '##..###..##', '....###....', '...........'],
+  'extra-ball': [
+    '.###...###...###...###.',
+    '#####.#####.#####.#####',
+    '#####.#####.#####.#####',
+    '#####.#####.#####.#####',
+    '.###...###...###...###.',
+  ],
   buff: ['..###..', '.##.##.', '...##..', '...#...', '...#...', '.......', '...#...'],
   shrink: ['#.....#', '##...##', '.##.##.', '##...##', '#.....#'],
   shield: ['.#####.', '#######', '##...##', '.##.##.', '..###..', '...#...'],
   barrier: ['##.##.##', '........', '########', '########'],
   tnt: ['###.#..#.###', '.#..##.#..#.', '.#..#.##..#.', '.#..#..#..#.'],
+};
+
+const fracture = [
+  [-6, 1, 2, 4], [-6, 4, 4, 2], [-3, 5, 2, 4], [-3, 8, 5, 2],
+  [1, 9, 2, 4], [1, 12, 4, 2], [4, 13, 2, 5],
+  [-8, 8, 6, 2], [-9, 9, 2, 3], [-11, 11, 3, 2],
+  [3, 10, 5, 2], [7, 8, 2, 3], [8, 7, 3, 2],
+];
+
+const leftSnowMound = ['...#####...', '..#######..', '.#########.', '###########', '.####.###..'];
+const rightSnowMound = ['.....#####...', '...########..', '.###########.', '#############', '..###.######.'];
+const snowCaps = {
+  double: [
+    [0.22, ['..########..', '.###########', '############', '############', '..####..###.'], 1.15],
+    [0.78, ['.#########..', '###########.', '############', '############', '.###..#####.'], 1.15],
+  ],
+  left: [[0.31, leftSnowMound, 1]],
+  right: [[0.71, rightSnowMound, 1]],
 };
 
 const digits = [
@@ -86,98 +115,138 @@ function pixelPanel(graphic, x, y, width, height, step, color) {
     .fill(color);
 }
 
-export function brickColor({ kind, paint, hitsLeft }) {
-  if (kind === 'hard') return hardFaces[hitsLeft - 1] ?? hardFaces[0];
-  if (kind === 'tnt') return brickFaces.tnt;
-  return paint?.[0] ?? brickFaces[kind] ?? gold;
+export function brickColor({ paint }) {
+  return BRICK_PALETTES[paint]?.face ?? gold;
 }
 
-export function durabilityPip(graphic, brick, index, color, alpha, offsetX = 0, offsetY = 0) {
-  const scale = Math.min(1, brick.width / 29, brick.height / 16);
-  graphic.rect(offsetX + brick.width / 2 + (index * 8 - 11) * scale,
-    offsetY + brick.height / 2 - 3 * scale, 6 * scale, 5 * scale).fill({ color, alpha });
+function brickIconColor(color) {
+  const red = color >> 16;
+  const green = (color >> 8) & 0xff;
+  const blue = color & 0xff;
+  return 0.299 * red + 0.587 * green + 0.114 * blue > 136 ? 0x302319 : cream;
 }
 
-export function drawBrick(brick, graphic = new Graphics()) {
-  const { width, height, kind } = brick;
+export function drawHardCrack(graphic, brick, offsetX = 0, offsetY = 0, flashAlpha = 0) {
+  const centerX = offsetX + Math.floor(brick.width / 2);
+  for (const [x, y, width, height] of fracture) {
+    graphic.rect(centerX + x + 1, offsetY + y + 1, width, height);
+  }
+  graphic.fill({ color: cream, alpha: flashAlpha || 0.5 });
+  if (flashAlpha > 0) return;
+
+  for (const [x, y, width, height] of fracture) {
+    graphic.rect(centerX + x, offsetY + y, width, height);
+  }
+  graphic.fill({ color: 0x2c1d18, alpha: 0.92 });
+}
+
+export function drawBrick(brick, textures, graphic = new Graphics()) {
   graphic.clear();
+  graphic.alpha = 1;
   graphic.position.set(brick.x, brick.y);
   graphic.visible = brick.active;
   if (!graphic.visible) return graphic;
 
-  if (kind === 'invisible') {
-    for (let x = 4; x < width - 4; x += 8) {
-      const length = Math.min(4, width - 3 - x);
-      graphic.rect(x, 1, length, 2).rect(x, height - 3, length, 2);
-    }
-    graphic.rect(1, 5, 2, height - 10).rect(width - 3, 5, 2, height - 10)
-      .fill({ color: cream, alpha: 0.8 });
+  if (brick.kind === 'invisible') {
+    drawConcealedBrick(graphic, brick.width, brick.height);
   } else {
-    drawBrickFace(graphic, brick);
+    drawBrickFace(graphic, brick, textures[BRICK_TEXTURES[brick.paint]]);
   }
-
-  if (brick.shielded) {
-    for (const x of [0, width - 8]) {
-      for (const y of [0, height - 6]) graphic.rect(x, y, 8, 6);
-    }
-    graphic.fill(assist.blue);
-    for (const x of [0, width - 2]) graphic.rect(x, 0, 2, height);
-    for (const x of [0, width - 8]) {
-      graphic.rect(x, 0, 8, 2).rect(x, height - 2, 8, 2);
-    }
-    graphic.fill(assist.ice);
-  }
+  if (brick.shielded) drawShieldCover(graphic, brick.width, brick.height);
   return graphic;
 }
 
-function drawBrickFace(graphic, brick) {
-  const { width, height, kind, paint } = brick;
-  const x = width / 2;
-  const y = height / 2 - 0.5;
-  const armed = kind === 'tnt' && brick.detonatesAt !== undefined;
-  const color = armed ? gold : brickColor(brick);
-  const shadow = kind === 'tnt' ? burgundy : paint?.[1] ?? pine;
-  pixelPanel(graphic, 0, 0, width, height, 2, ink);
-  pixelPanel(graphic, 1, 1, width - 2, height - 2, 2, shadow);
-  pixelPanel(graphic, 2, 1, width - 4, height - 5, 2, color);
-  graphic.rect(4, 2, width - 8, 1).rect(3, 3, 1, 4).fill({ color: cream, alpha: 0.25 })
-    .rect(5, 4, width - 10, height - 11).fill({ color: ink, alpha: 0.09 })
-    .rect(5, height - 6, width - 9, 1).rect(width - 5, 5, 1, height - 11)
-    .fill({ color: ink, alpha: 0.23 });
-  if (kind === 'standard') return;
+function drawConcealedBrick(graphic, width, height) {
+  for (let x = 4; x < width - 3; x += 9) {
+    const dash = Math.min(5, width - 3 - x);
+    graphic.rect(x, 1, dash, 2).rect(x, height - 3, dash, 2);
+  }
+  for (let y = 4; y < height - 3; y += 8) {
+    const dash = Math.min(4, height - 3 - y);
+    graphic.rect(1, y, 2, dash).rect(width - 3, y, 2, dash);
+  }
+  graphic.fill({ color: cream, alpha: 0.8 });
+}
 
-  const badge = kind === 'hard' ? color : brickFaces[kind];
-  const scale = Math.min(1, width / 31, height / 17);
-  const badgeWidth = (kind === 'tnt' ? 28 : 29) * scale;
-  pixelPanel(graphic, x - badgeWidth / 2, y - 6 * scale, badgeWidth, 12 * scale, scale, ink);
-  if (kind === 'hard') {
-    for (let index = 0; index < 3; index += 1) {
-      durabilityPip(graphic, brick, index, badge, index < brick.hitsLeft ? 1 : 0.25);
-    }
-  } else {
-    glyph(graphic, glyphs[kind], x, y, (kind === 'tnt' ? 1.6 : 1.4) * scale, armed ? gold : badge);
-    if (armed) {
-      const sparkX = Math.min(width - 4, x + badgeWidth / 2 + 4);
-      graphic.rect(sparkX - 3, y - 1, 6, 2).rect(sparkX - 1, y - 3, 2, 6).fill(cream);
-    }
+function drawShieldCover(graphic, width, height) {
+  pixelPanel(graphic, 0, 0, width, height, 2, { color: assist.ice, alpha: 0.12 });
+  graphic.rect(2, 0, width - 4, 1).rect(1, 1, width - 2, 1)
+    .rect(0, 2, 2, height - 4).rect(width - 2, 2, 2, height - 4)
+    .rect(1, height - 2, width - 2, 1).rect(2, height - 1, width - 4, 1)
+    .fill(0x72c6d5)
+    .rect(4, 2, Math.min(15, width - 8), 1).rect(2, 3, 1, 4).fill(assist.ice)
+    .rect(3, height - 3, width - 6, 1).fill({ color: assist.blue, alpha: 0.7 });
+}
+
+function drawSnowCaps(graphic, width, style) {
+  for (const [offset, rows, pixel] of snowCaps[style] ?? []) {
+    const x = Math.round(width * offset);
+    glyph(graphic, rows, x, 0.5 + rows.length * pixel / 2, pixel, 0xdce1e5);
+    glyph(graphic, rows.slice(0, 4), x, 0.5 + 2 * pixel, pixel, 0xffffff);
   }
 }
 
-export function drawPaddle(graphic, appearance) {
+function drawBrickFace(graphic, brick, texture) {
+  const { width, height, kind, paint, snow } = brick;
+  const color = brickColor(brick);
+  const shadow = BRICK_PALETTES[paint]?.shadow ?? pine;
+  if (kind === 'hard') {
+    graphic.rect(6, 0, width - 12, height)
+      .rect(3, 2, width - 6, height - 4)
+      .rect(0, 5, width, height - 10).fill(ink)
+      .rect(6, 1, width - 12, height - 2)
+      .rect(3, 5, 3, height - 10).rect(width - 6, 5, 3, height - 10).fill(shadow)
+      .rect(7, 2, width - 14, height - 6)
+      .rect(5, 5, 2, height - 10).rect(width - 7, 5, 2, height - 10).fill(color)
+      .rect(7, 2, width - 14, 3).fill({ color: cream, alpha: 0.62 })
+      .rect(5, 5, 3, 4).rect(width - 8, 5, 3, 2).fill({ color: cream, alpha: 0.38 })
+      .rect(7, height - 7, width - 14, 3)
+      .rect(width - 8, 7, 3, height - 14).fill({ color: ink, alpha: 0.42 });
+    drawSnowCaps(graphic, width, snow);
+    if (brick.hitsLeft === 1) drawHardCrack(graphic, brick);
+    return;
+  }
+
+  if (texture) {
+    // Keep the face opaque when a texture has translucent pixels inside the bevel.
+    graphic.rect(4, 5, width - 8, height - 9).fill(color)
+      .rect(0, 0, width, height).fill({ texture });
+  } else {
+    graphic.rect(3, 0, width - 6, height)
+      .rect(1.5, 1.5, width - 3, height - 3)
+      .rect(0, 3.5, width, height - 7).fill(shadow)
+      .rect(3, 1.5, width - 6, height - 4).fill(color)
+      .rect(3, 1.5, width - 6, 2)
+      .rect(1.5, 3.5, 2, height - 7).rect(width - 3.5, 3.5, 2, height - 7).fill({ color: cream, alpha: 0.53 })
+      .rect(3, 3.5, width - 6, 1.5).fill({ color: cream, alpha: 0.28 })
+      .rect(3, height - 3, width - 6, 1.5).fill({ color: shadow, alpha: 0.5 });
+  }
+  drawSnowCaps(graphic, width, snow);
+  if (kind === 'standard') return;
+
+  const scale = Math.min(1, width / 31, height / 17);
+  glyph(graphic, glyphs[kind], width / 2, height * 0.55,
+    (kind === 'tnt' ? 1.65 : 1.45) * scale, brickIconColor(color));
+}
+
+function drawPlatform(graphic, x, y, width, height, { face, edge, shadow }) {
+  pixelPanel(graphic, x, y, width, height + 2, 2, ink);
+  pixelPanel(graphic, x + 1, y, width - 2, height, 2, shadow);
+  graphic.rect(x + 3, y + 1, width - 6, height - 4).fill(face)
+    .rect(x + 3, y, width - 6, 2).fill(edge);
+}
+
+export function makePaddle() {
+  const graphic = new Graphics();
   const { width, height } = PADDLE;
-  const left = -width / 2;
-  const { face, edge, shadow } = paddlePalettes[appearance];
-  graphic.clear();
-  pixelPanel(graphic, left, 0, width, height + 2, 2, ink);
-  pixelPanel(graphic, left + 1, 0, width - 2, height, 2, shadow);
-  graphic.rect(left + 3, 1, width - 6, height - 4).fill(face)
-    .rect(left + 3, 0, width - 6, 2).fill(edge);
+  drawPlatform(graphic, -width / 2, 0, width, height, paddlePalette);
 
   // A small holly sprig fits inside the face at every paddle width.
   graphic.rect(-7, 3, 5, 3).rect(-5, 6, 4, 2)
     .rect(2, 6, 5, 3).rect(2, 4, 3, 2).fill(0x2c513b)
     .rect(-6, 4, 3, 2).rect(3, 6, 3, 2).fill(0xbac287)
     .rect(-2, 4, 3, 3).rect(0, 7, 2, 2).fill(0xf2be90);
+  return graphic;
 }
 
 export function makeCannon() {
@@ -228,23 +297,9 @@ export function drawBall(graphic, x, y, bonus) {
 }
 
 export function drawRail(graphic, x, y, width, height, kind, warning) {
-  const guard = kind === 'guard';
-  const color = guard ? assist.ice : assist.violet;
-  const fill = guard ? assist.blue : assist.plum;
-  pixelPanel(graphic, x, y, width, height, 1, ink);
-  pixelPanel(graphic, x + 1, y + 1, width - 2, height - 2, 1, fill);
-  if (guard) {
-    graphic.rect(x + 2, y + 1, width - 4, 2);
-    for (let offset = 6; offset < width - 7; offset += 16) graphic.rect(x + offset, y + 3, 4, 3);
-  } else {
-    for (let offset = 3; offset < width - 3; offset += 13) {
-      const dash = Math.min(8, width - offset - 3);
-      graphic.rect(x + offset, y + 2, dash, 2).rect(x + offset, y + height - 4, dash, 2);
-    }
-  }
-  graphic.fill(color);
+  drawPlatform(graphic, x, y, width, height - 2, railPalettes[kind]);
   if (warning > 0) {
-    graphic.rect(x + 1, y + 1, width - 2, height - 2).fill({ color: cream, alpha: warning * 0.55 });
+    graphic.rect(x + 3, y, width - 6, 2).fill({ color: cream, alpha: warning * 0.55 });
   }
 }
 

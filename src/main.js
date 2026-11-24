@@ -1,6 +1,6 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import { BALL_RADIUS, BARRIER, BUFFS, CANNON, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
-import { assist, brickColor, drawBall, drawBrick, drawDrop, drawPaddle, drawRail, drawScore, drawShot, drawSpark, durabilityPip, makeCannon } from './art.js';
+import { BALL_RADIUS, BARRIER, CANNON, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
+import { assist, brickColor, drawBall, drawBrick, drawDrop, drawHardCrack, drawRail, drawScore, drawShot, drawSpark, loadBrickTextures, makeCannon, makePaddle } from './art.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -185,11 +185,12 @@ async function init() {
     preference: ['webgl', 'canvas'],
   });
   byId('canvas-layer').appendChild(app.canvas);
+  const brickTextures = await loadBrickTextures();
 
   const bricks = new Container();
   const trail = new Graphics();
   const particles = new Graphics();
-  const paddle = new Graphics();
+  const paddle = makePaddle();
   const leftCannon = makeCannon();
   const rightCannon = leftCannon.clone();
   const balls = new Graphics();
@@ -204,7 +205,6 @@ async function init() {
   const ballFlashes = new Map();
   let blastOffset = '';
   let scoringBlast = false;
-  let paddleAppearance;
   let paddleImpacts = [];
   let lifeLoss;
   let heartPulse;
@@ -236,16 +236,16 @@ async function init() {
       return;
     }
     if (event === 'extra-ball') {
-      announcement.textContent = '已釋放 3 顆額外球。';
+      announcement.textContent = `已釋放 ${spawnedBalls.length} 顆額外球。`;
       for (const ball of spawnedBalls) ballFlashes.set(ball, ballFlashDuration);
     }
     const brick = payload;
     if (brick) {
       const view = brickViews.get(brick);
       if (brick.active) {
-        drawBrick(brick, view);
+        drawBrick(brick, brickTextures, view);
         if (event === 'brick-damage') {
-          durabilityFlashes.push({ brick, index: brick.hitsLeft, life: hardFlashDuration });
+          durabilityFlashes.push({ brick, life: hardFlashDuration });
         }
         if (event === 'shield-break') burstShield(sparks, brick);
         return;
@@ -322,7 +322,7 @@ async function init() {
     let levelChanged = false;
     if (displayedBricks !== game.bricks) {
       for (const old of bricks.removeChildren()) old.destroy();
-      brickViews = new Map(game.bricks.map((brick) => [brick, bricks.addChild(drawBrick(brick))]));
+      brickViews = new Map(game.bricks.map((brick) => [brick, bricks.addChild(drawBrick(brick, brickTextures))]));
       sparks = [];
       blasts = [];
       durabilityFlashes = [];
@@ -408,14 +408,6 @@ async function init() {
   const rightKeys = ['ArrowRight', 'KeyD'];
 
   function renderPaddle() {
-    const shrunk = game.effectTimeLeft('shrink') > 0;
-    const boosted = BUFFS.some((kind) => game.effectTimeLeft(kind) > 0);
-    const appearance = shrunk ? 'shrink' : boosted ? 'buff' : 'standard';
-    if (appearance !== paddleAppearance) {
-      drawPaddle(paddle, appearance);
-      paddleAppearance = appearance;
-    }
-
     const reduced = reducedMotion.matches;
     const latest = paddleImpacts.at(-1);
     let stretch = 0;
@@ -448,16 +440,8 @@ async function init() {
   function renderPlayfield() {
     for (const [brick, view] of brickViews) {
       if (!brick.active || brick.detonatesAt === undefined) continue;
-      if (reducedMotion.matches) {
-        view.tint = 0xffffff;
-        continue;
-      }
-
       const progress = 1 - (brick.detonatesAt - game.playTime) / TNT.delay;
-      const dim = pulseStrength(progress);
-      const green = Math.round(255 - 110 * dim);
-      const blue = Math.round(255 - 145 * dim);
-      view.tint = 0xff0000 | (green << 8) | blue;
+      view.alpha = reducedMotion.matches ? 0.72 : 1 - 0.45 * pulseStrength(progress);
     }
 
     renderPaddle();
@@ -500,6 +484,7 @@ async function init() {
   function renderBrickEffects(seconds) {
     const reduced = reducedMotion.matches;
     particles.clear();
+
     for (const blast of blasts) {
       blast.life -= seconds;
       if (blast.life <= 0) continue;
@@ -530,10 +515,9 @@ async function init() {
 
     for (const flash of durabilityFlashes) {
       flash.life -= seconds;
-      const { brick, life, index } = flash;
+      const { brick, life } = flash;
       if (!brick.active || life <= 0) continue;
-      durabilityPip(particles, brick, index, 0xfff2cf,
-        Math.min(1, life / hardFlashDuration * 1.65), brick.x, brick.y);
+      drawHardCrack(particles, brick, brick.x, brick.y, life / hardFlashDuration * 0.45);
     }
     durabilityFlashes = durabilityFlashes.filter(({ brick, life }) => brick.active && life > 0);
 
@@ -694,7 +678,7 @@ async function init() {
     const bricksChangedWidth = courtWidth !== game.width;
     if (game.resize(courtWidth, courtHeight)) {
       if (bricksChangedWidth) {
-        for (const [brick, view] of brickViews) drawBrick(brick, view);
+        for (const [brick, view] of brickViews) drawBrick(brick, brickTextures, view);
       }
       field.style.setProperty('--layout-bottom', `${game.layoutBottom / game.height * 100}%`);
       sparks = [];

@@ -17,7 +17,7 @@
         <header class="topbar">
           <div class="game-hud" role="group" aria-label="遊戲資訊">
             <div class="hud-stat">
-              <span class="stat-label" id="time-label">剩餘時間</span><output class="time-number" id="time-left" role="timer" aria-labelledby="time-label">1:30</output>
+              <span class="stat-label" id="time-label">剩餘時間</span><output class="time-number" id="time-left" role="timer" aria-labelledby="time-label">2:00</output>
             </div>
             <div class="hud-stat">
               <span class="stat-label">最高分</span><output id="best" aria-live="off">00000</output>
@@ -89,7 +89,7 @@
         </header>
         <div class="help-content">
           <p>用球拍接住球，打碎所有磚塊即可過關。每塊磚值 30 分，第一、二、三關通關分別加 1,000、1,500、2,000 分。TNT 會一次顯示自己和炸碎磚塊的合計分數。</p>
-          <p>一局有 90 秒和 3 條命。第一次發球後開始倒數，補發球和換關也會計時。從第一關打完三關，每剩下完整 1 秒加 20 分。</p>
+          <p>一局有 2 分鐘和 3 條命。第一次發球後開始倒數，補發球和換關也會計時。從第一關打完三關，每剩下完整 1 秒加 20 分。</p>
           <h3>操作方式</h3>
           <dl class="control-guide">
             <div><dt>移動</dt><dd><kbd>←</kbd> <kbd>→</kbd>、滑鼠移動或左右拖曳</dd></div>
@@ -97,14 +97,14 @@
           </dl>
           <h3>特殊磚塊</h3>
           <ul class="brick-legend">
-            <li><i class="brick-mark extra-ball-mark" aria-hidden="true"></i><span><strong>多球磚</strong>擊破後放出 3 顆球</span></li>
-            <li><i class="brick-mark buff-mark" aria-hidden="true">?</i><span><strong>道具磚</strong>接住掉落的禮物可強化</span></li>
-            <li><i class="brick-mark hard-mark" aria-hidden="true">Ⅲ</i><span><strong>硬磚</strong>需擊中 3 次</span></li>
-            <li><i class="brick-mark invisible-mark" aria-hidden="true"></i><span><strong>透明磚</strong>球穿過後顯形</span></li>
-            <li><i class="brick-mark tnt-mark" aria-hidden="true">TNT</i><span><strong>TNT</strong>擊中後延時爆炸</span></li>
-            <li><i class="brick-mark shrink-mark" aria-hidden="true">›‹</i><span><strong>縮板磚</strong>接到掉落的炸彈會暫時縮短球拍</span></li>
+            <li><i class="brick-mark extra-ball-mark" aria-hidden="true"></i><span><strong>多球磚</strong>擊破後額外放出 4 顆球</span></li>
+            <li><i class="brick-mark" aria-hidden="true">?</i><span><strong>道具磚</strong>接住掉落的禮物可強化</span></li>
+            <li><i class="brick-mark hard-mark" aria-hidden="true"></i><span><strong>硬磚</strong>厚邊切角的磚，第一下裂開，第二下打碎</span></li>
+            <li><i class="brick-mark invisible-mark" aria-hidden="true"></i><span><strong>透明磚</strong>虛線磚第一次被球穿過後顯現</span></li>
+            <li><i class="brick-mark tnt-mark" aria-hidden="true">TNT</i><span><strong>TNT</strong>引燃後越閃越快，直到爆炸</span></li>
+            <li><i class="brick-mark" aria-hidden="true">›‹</i><span><strong>縮板磚</strong>接到掉落的炸彈會暫時縮短球拍</span></li>
             <li><i class="brick-mark shield-mark" aria-hidden="true"></i><span><strong>護盾磚</strong>擊破後為鄰磚加護盾</span></li>
-            <li><i class="brick-mark barrier-mark" aria-hidden="true">▪▪▪</i><span><strong>攔截磚</strong>擊破後擋住向上攻擊</span></li>
+            <li><i class="brick-mark" aria-hidden="true">▪▪▪</i><span><strong>攔截磚</strong>擊破後擋住向上攻擊</span></li>
           </ul>
         </div>
       </dialog>
