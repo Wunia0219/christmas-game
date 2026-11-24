@@ -60,6 +60,13 @@ test('each level shuffles brick types and snow while keeping slots, colors, coun
       assert.deepEqual(actualCounts, counts);
       assert.deepEqual(Object.values(snowCounts), [0, 1, 2, 3]
         .map((index) => Math.floor((game.bricks.length + 3 - index) / 4)));
+      const specialBricks = game.bricks.filter(({ kind }) => kind !== 'standard');
+      for (const brick of specialBricks) {
+        const neighbors = specialBricks.filter((other) => other !== brick
+          && Math.abs(brick.x - other.x) <= BRICK.width * (1 + 8 / 42)
+          && Math.abs(brick.y - other.y) <= BRICK.height * (1 + 8 / 16));
+        assert(neighbors.length <= 1, 'special bricks may form pairs but not chains');
+      }
       return game.bricks;
     });
     assert.deepEqual(first.map(({ x, y, paint }) => [x, y, paint]), second.map(({ x, y, paint }) => [x, y, paint]));
@@ -259,22 +266,24 @@ test('the countdown runs after a miss and pauses until the next level launches',
   assert.equal(game.phase, 'serve');
   game.action();
 
-  const lastBrick = game.bricks.find(({ kind }) => kind === 'standard');
-  game.bricks = [lastBrick];
-  game.remaining = 1;
-  game.hitBrick(lastBrick);
-  assert.equal(game.phase, 'level-clear');
-  const timeAtClear = game.timeLeft;
-  game.update(0.04, { elapsedSeconds: timeAtClear + 4 });
-  assert.equal(game.phase, 'level-clear');
-  assert.equal(game.timeLeft, timeAtClear);
-  game.action();
-  assert.equal(game.phase, 'playing');
-  assert.equal(game.level, 2);
-  assert.equal(game.lives, LIVES - 1);
-  assert.equal(game.timeLeft, timeAtClear);
-  game.update(0.02, { elapsedSeconds: 1 });
-  assert(Math.abs(game.timeLeft - (timeAtClear - 1)) < 1e-9);
+  for (let nextLevel = 2; nextLevel <= LEVELS; nextLevel += 1) {
+    const lastBrick = game.bricks.find(({ kind }) => kind === 'standard');
+    game.bricks = [lastBrick];
+    game.remaining = 1;
+    hitBrick(game, lastBrick);
+    assert.equal(game.phase, 'level-clear');
+    const timeAtClear = game.timeLeft;
+    game.update(0.04, { elapsedSeconds: timeAtClear + 4 });
+    assert.equal(game.phase, 'level-clear');
+    assert.equal(game.timeLeft, timeAtClear);
+    game.action();
+    assert.equal(game.phase, 'playing');
+    assert.equal(game.level, nextLevel);
+    assert.equal(game.lives, LIVES - 1);
+    assert.equal(game.timeLeft, timeAtClear);
+    game.update(0.02, { elapsedSeconds: 1 });
+    assert(Math.abs(game.timeLeft - (timeAtClear - 1)) < 1e-9);
+  }
 });
 
 test('a paddle arriving just after the ball crosses its top saves the ball', () => {

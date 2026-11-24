@@ -194,14 +194,36 @@ function shuffle(items) {
   return items;
 }
 
+function placeSpecialBricks(slots, specials) {
+  const candidates = shuffle(slots.filter(({ standardOnly }) => !standardOnly));
+  const selected = new Set();
+  const paired = new Set();
+
+  // Prefer isolated slots, then allow a pair without joining any existing pair.
+  for (const maxNeighbors of [0, 1]) {
+    for (const slot of candidates) {
+      if (selected.size === specials.length) break;
+      if (selected.has(slot)) continue;
+      const neighbors = [...selected].filter((other) => areBrickNeighbors(slot, other, 1));
+      if (neighbors.length > maxNeighbors || neighbors.some((other) => paired.has(other))) continue;
+      selected.add(slot);
+      if (neighbors.length === 1) paired.add(slot).add(neighbors[0]);
+    }
+  }
+
+  // Keep the requested counts even if a future layout is too dense for pairs.
+  const placements = [...selected, ...candidates.filter((slot) => !selected.has(slot))];
+  return new Map(shuffle([...specials]).map((code, index) => [placements[index], BRICK_KINDS[code]]));
+}
+
 function makeBricks(level, widthScale) {
   const { slots, palette, specials } = layouts[level - 1];
-  const shuffleCount = slots.filter(({ standardOnly }) => !standardOnly).length;
-  const kinds = shuffle([...specials.padEnd(shuffleCount, '#')]);
+  const kinds = placeSpecialBricks(slots, specials);
   const snowBySlot = shuffle(slots.map((_, index) => snowStyles[index % snowStyles.length]));
 
-  return slots.map(({ cell, standardOnly, ...bounds }, index) => {
-    const kind = standardOnly ? 'standard' : BRICK_KINDS[kinds.pop()] ?? 'standard';
+  return slots.map((slot, index) => {
+    const { cell, standardOnly, ...bounds } = slot;
+    const kind = kinds.get(slot) ?? 'standard';
     return {
       ...bounds,
       x: bounds.x * widthScale,
