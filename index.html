@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0d1320" />
+    <meta name="theme-color" content="#ecdec7" />
     <meta name="description" content="東勢長頸鹿美語的打磚塊遊戲。選一關，用球拍接住彈球，打碎磚陣。" />
     <title>Giraffe 打磚塊 | 東勢長頸鹿美語</title>
     <link rel="stylesheet" href="./src/style.css" />
@@ -15,26 +15,26 @@
     <main class="game-shell">
       <section class="game-frame" aria-label="打磚塊遊戲">
         <header class="topbar">
-          <output class="time-number" id="time-left" role="timer" aria-label="剩餘時間">
-            <span class="sr-only" id="time-value">2:00</span>
-            <canvas id="time-pixels" width="26" height="7" aria-hidden="true"></canvas>
-          </output>
-
-          <div class="toolbar" role="group" aria-label="遊戲選項">
-            <button class="button" id="help" type="button" aria-haspopup="dialog" disabled>
-              <i class="help-icon" aria-hidden="true">?</i><span class="toolbar-label">玩法</span>
-            </button>
-            <button class="button" id="sound" type="button" aria-pressed="false" disabled>
-              <i class="sound-icon" aria-hidden="true"></i><span class="toolbar-label" id="sound-label">音效關</span>
-            </button>
-            <button class="button" id="fullscreen" type="button" aria-pressed="false" hidden>
-              <i class="fullscreen-icon" aria-hidden="true"></i><span class="toolbar-label" id="fullscreen-label">全螢幕</span>
+          <div class="organizations" role="group" aria-label="機構">
+            <div class="organization">
+              <img class="organization-logo" src="./assets/organizations/sfang.webp" alt="" width="40" height="40" />
+              <span>十方啟能中心</span>
+            </div>
+            <div class="organization">
+              <img class="organization-logo" src="./assets/organizations/wuja.webp" alt="" width="40" height="40" />
+              <span>五甲教養院</span>
+            </div>
+          </div>
+          <div class="time-number">
+            <output class="sr-only" id="time-left" role="timer" aria-label="剩餘時間"><span id="time-value">2:00</span></output>
+            <button class="timer-trigger" id="fullscreen-trigger" type="button" disabled
+              aria-label="切換全螢幕" aria-description="快速點兩下倒數數字，或按 Enter 或空白鍵。" aria-pressed="false">
+              <canvas id="time-pixels" width="26" height="7" aria-hidden="true"></canvas>
             </button>
           </div>
         </header>
 
         <div class="field-stage">
-          <div class="art-slot logo-slot"></div>
           <div id="field" class="field" tabindex="0" aria-label="遊戲畫面" aria-describedby="controls">
             <div class="arcade-hud" role="group" aria-label="本局資訊">
               <output class="score-number" id="score" aria-live="off" aria-label="本局分數">
@@ -60,7 +60,6 @@
               </div>
             </div>
           </div>
-          <div class="art-slot mascot-slot"></div>
         </div>
 
         <footer class="game-deck">
@@ -70,40 +69,16 @@
           <div class="level-readout" id="level-readout">
             <span class="stat-label">關卡</span><span class="figures"><strong id="level">01</strong><span id="level-total"> / 03</span></span>
           </div>
+          <div class="organization deck-brand">
+            <img class="organization-logo" src="./assets/organizations/dongshi-giraffe.webp" alt="" width="40" height="40" />
+            <span>東勢長頸鹿美語</span>
+          </div>
         </footer>
       </section>
 
       <p class="sr-only" id="controls">用方向鍵或滑鼠移動球拍，空白鍵發球。觸控時左右拖曳移動，輕點發球。</p>
       <p class="sr-only" id="announcement" role="status"></p>
 
-      <dialog class="help-dialog" id="help-dialog" aria-labelledby="help-title">
-        <header class="dialog-header">
-          <h2 id="help-title">遊戲玩法</h2>
-          <form method="dialog">
-            <button class="button dialog-close" type="submit" aria-label="關閉玩法" autofocus>×</button>
-          </form>
-        </header>
-        <div class="help-content">
-          <p>用球拍接住球，打碎所有磚塊即可過關。每塊磚值 30 分，第一、二、三關通關分別加 1,000、1,500、2,000 分。TNT 會一次顯示自己和炸碎磚塊的合計分數。</p>
-          <p>一局有 2 分鐘和 3 條命。第一次發球後開始倒數，等待補發球時也會計時。過關時暫停倒數，按下「下一關」發球後繼續。從第一關打完三關，每剩下完整 1 秒加 20 分。</p>
-          <h3>操作方式</h3>
-          <dl class="control-guide">
-            <div><dt>移動</dt><dd><kbd>←</kbd> <kbd>→</kbd>、滑鼠移動或左右拖曳</dd></div>
-            <div><dt>發球</dt><dd><kbd>Space</kbd> 或輕點球場</dd></div>
-          </dl>
-          <h3>特殊磚塊</h3>
-          <ul class="brick-legend">
-            <li><i class="brick-mark extra-ball-mark" aria-hidden="true"></i><span><strong>多球磚</strong>擊破後額外放出 4 顆球</span></li>
-            <li><img class="brick-mark buff-brick-mark" src="./assets/sprites/buff-mark.webp" alt="" /><span><strong>道具磚</strong>接住掉落的禮物可強化</span></li>
-            <li><i class="brick-mark hard-mark" aria-hidden="true"></i><span><strong>硬磚</strong>厚邊切角的磚，第一下裂開，第二下打碎</span></li>
-            <li><i class="brick-mark invisible-mark" aria-hidden="true"></i><span><strong>透明磚</strong>虛線磚第一次被球穿過後顯現</span></li>
-            <li><i class="brick-mark tnt-mark" aria-hidden="true">TNT</i><span><strong>TNT</strong>引燃後越閃越快，直到爆炸</span></li>
-            <li><i class="brick-mark" aria-hidden="true">›‹</i><span><strong>縮板磚</strong>接到掉落的炸彈會暫時縮短球拍</span></li>
-            <li><i class="brick-mark shield-mark" aria-hidden="true"></i><span><strong>護盾磚</strong>擊破後為鄰磚加護盾</span></li>
-            <li><i class="brick-mark" aria-hidden="true">▪▪▪</i><span><strong>攔截磚</strong>擊破後擋住向上攻擊</span></li>
-          </ul>
-        </div>
-      </dialog>
     </main>
     <script type="module" src="./src/main.js"></script>
   </body>

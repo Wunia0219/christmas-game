@@ -10,10 +10,7 @@ const actionButton = byId('action');
 const levelPicker = byId('level-picker');
 const levelSelect = byId('level-select');
 const levelReadout = byId('level-readout');
-const soundButton = byId('sound');
-const helpButton = byId('help');
-const helpDialog = byId('help-dialog');
-const fullscreenButton = byId('fullscreen');
+const fullscreenTrigger = byId('fullscreen-trigger');
 const score = byId('score');
 const scoreValue = byId('score-value');
 const scorePixels = byId('score-pixels');
@@ -35,6 +32,8 @@ const ballFlashDuration = 0.26;
 const paddleImpactDuration = 0.18;
 const paddleImpactAnchor = 13;
 const multiballScoreLift = 34;
+const fullscreenTapWindowMs = 400;
+const fullscreenTapSlop = 10;
 const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護', cannons: '雙側砲台' };
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const number = (value, digits) => String(value).padStart(digits, '0');
@@ -82,9 +81,19 @@ const tones = {
 };
 
 let audio;
-let soundEnabled = false;
 let explosionNoise;
 let lastExplosionAt = -Infinity;
+
+async function playLaunchSound() {
+  const Audio = window.AudioContext || window.webkitAudioContext;
+  if (!Audio) return;
+  try {
+    // Create or resume audio from the gesture that serves the ball.
+    audio ??= new Audio();
+    if (audio.state !== 'running') await audio.resume();
+    playSound('launch');
+  } catch { /* Gameplay can continue if audio is unavailable. */ }
+}
 
 function playExplosionNoise(now) {
   const duration = 0.26;
@@ -111,7 +120,7 @@ function playExplosionNoise(now) {
 
 function playSound(event) {
   const effect = tones[event];
-  if (!effect || !soundEnabled || audio?.state !== 'running') return;
+  if (!effect || audio?.state !== 'running') return;
   const [start, end, duration] = effect;
   const now = audio.currentTime;
   const explosion = event === 'tnt-explode';
@@ -200,6 +209,10 @@ async function init() {
   let lifeLoss;
   let heartPulse;
   const game = new Game((event, payload, spawnedBalls) => {
+    if (event === 'launch') {
+      void playLaunchSound();
+      return;
+    }
     playSound(event);
     if (event === 'paddle') {
       paddleImpacts.push({ ...payload, age: 0 });
@@ -309,7 +322,7 @@ async function init() {
       displayedTime = secondsLeft;
       const display = `${Math.floor(secondsLeft / 60)}:${number(secondsLeft % 60, 2)}`;
       clockValue.textContent = display;
-      drawScore(clockPixels, display, { color: secondsLeft <= 10 ? '#ff9eab' : '#91ead3' });
+      drawScore(clockPixels, display, { color: secondsLeft <= 10 ? '#9b3146' : '#28574e' });
     }
     let levelChanged = false;
     if (displayedBricks !== game.bricks) {
@@ -549,7 +562,7 @@ async function init() {
   });
 
   window.addEventListener('keydown', (event) => {
-    if (helpDialog.open || event.ctrlKey || event.metaKey || event.altKey || event.target === levelSelect) return;
+    if (event.ctrlKey || event.metaKey || event.altKey || event.target === levelSelect) return;
     if (leftKeys.includes(event.code) || rightKeys.includes(event.code)) {
       event.preventDefault();
       pointerX = undefined;
@@ -603,54 +616,67 @@ async function init() {
   field.addEventListener('lostpointercapture', () => { gesture = undefined; });
 
   actionButton.addEventListener('click', primaryAction);
-  helpButton.addEventListener('click', () => {
-    clearMovement();
-    helpDialog.showModal();
-  });
   levelSelect.addEventListener('change', () => {
     if (game.phase !== 'ready') return;
     clearMovement();
     game.reset(Number(levelSelect.value));
     syncHud();
   });
-  soundButton.addEventListener('click', async () => {
-    soundEnabled = !soundEnabled;
-    const enabling = soundEnabled;
-    if (enabling) {
-      try {
-        const Audio = window.AudioContext || window.webkitAudioContext;
-        audio ??= new Audio();
-        await audio.resume();
-      } catch {
-        soundEnabled = false;
-      }
-    }
-    soundButton.setAttribute('aria-pressed', String(soundEnabled));
-    byId('sound-label').textContent = soundEnabled ? '音效開' : '音效關';
-    if (enabling && soundEnabled) playSound('launch');
-  });
   if (document.fullscreenEnabled) {
-    fullscreenButton.hidden = false;
-    fullscreenButton.addEventListener('click', async () => {
+    fullscreenTrigger.disabled = false;
+    let fullscreenPress;
+    let lastFullscreenTap = -Infinity;
+
+    async function toggleFullscreen() {
+      lastFullscreenTap = -Infinity;
       try {
         if (document.fullscreenElement) await document.exitFullscreen();
         else await document.documentElement.requestFullscreen();
       } catch {
         announcement.textContent = '目前無法切換全螢幕。';
       }
+    }
+
+    const movedDuringPress = (event) => Math.hypot(event.clientX - fullscreenPress.x, event.clientY - fullscreenPress.y) > fullscreenTapSlop;
+    function cancelFullscreenPress(event) {
+      if (fullscreenPress?.id !== event.pointerId) return;
+      fullscreenPress = undefined;
+      lastFullscreenTap = -Infinity;
+    }
+    fullscreenTrigger.addEventListener('pointerdown', (event) => {
+      if (!event.isPrimary || event.button !== 0) return;
+      fullscreenPress = { id: event.pointerId, x: event.clientX, y: event.clientY, startedAt: event.timeStamp };
+      fullscreenTrigger.setPointerCapture(event.pointerId);
+    });
+    fullscreenTrigger.addEventListener('pointermove', (event) => {
+      if (fullscreenPress?.id === event.pointerId && movedDuringPress(event)) cancelFullscreenPress(event);
+    });
+    fullscreenTrigger.addEventListener('pointerup', (event) => {
+      if (fullscreenPress?.id !== event.pointerId) return;
+      if (event.timeStamp - fullscreenPress.startedAt > fullscreenTapWindowMs || movedDuringPress(event)) {
+        cancelFullscreenPress(event);
+        return;
+      }
+      fullscreenPress = undefined;
+      // Release supplies the activation needed by touch browsers.
+      if (event.timeStamp - lastFullscreenTap <= fullscreenTapWindowMs) void toggleFullscreen();
+      else lastFullscreenTap = event.timeStamp;
+    });
+    fullscreenTrigger.addEventListener('pointercancel', cancelFullscreenPress);
+    fullscreenTrigger.addEventListener('lostpointercapture', cancelFullscreenPress);
+    fullscreenTrigger.addEventListener('contextmenu', (event) => event.preventDefault());
+    fullscreenTrigger.addEventListener('click', (event) => {
+      // Native keyboard and assistive-technology activation uses a click without a pointer.
+      if (event.detail === 0 && !event.pointerType) void toggleFullscreen();
     });
     document.addEventListener('fullscreenchange', () => {
-      const active = Boolean(document.fullscreenElement);
-      fullscreenButton.setAttribute('aria-pressed', String(active));
-      byId('fullscreen-label').textContent = active ? '退出全螢幕' : '全螢幕';
+      fullscreenTrigger.setAttribute('aria-pressed', String(Boolean(document.fullscreenElement)));
     });
   }
 
   byId('level-total').textContent = ` / ${number(LEVELS, 2)}`;
   levelSelect.replaceChildren(...LEVEL_NAMES.map((name, index) => new Option(`${number(index + 1, 2)} · ${name}`, index + 1)));
   actionButton.disabled = false;
-  helpButton.disabled = false;
-  soundButton.disabled = !(window.AudioContext || window.webkitAudioContext);
   syncHud();
 
   new ResizeObserver(([{ contentRect: { width, height } }]) => {
