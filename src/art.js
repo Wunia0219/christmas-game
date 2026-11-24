@@ -1,4 +1,4 @@
-import { Assets, Graphics } from 'pixi.js';
+import { Assets, Container, Graphics } from 'pixi.js';
 import { BALL_RADIUS, BRICK_PALETTES, BRICK_TEXTURES, CANNON, DROP_RADIUS, PADDLE, SPRITE_TEXTURES } from './game.js';
 
 const ink = 0x111b20;
@@ -11,6 +11,18 @@ export const bonusBallColor = 0xffb36b;
 const bonusBallTint = 0xffc075;
 
 const paddlePalette = { face: 0xba4d53, edge: 0xd99279, shadow: burgundy };
+const hollyPalette = { d: 0x263e31, g: 0x718b51, l: 0xb2c978, s: 0x426248, r: 0x6f2136, b: 0xd55b64, h: 0xf5a090 };
+const hollyPixels = [
+  '....d.....d...',
+  '..ddgd...dgdd.',
+  '.dglgd..dglggd',
+  'dgglgsddglggd.',
+  '.dgglsgslggsd.',
+  '..ddsgrdrrsd..',
+  '....drhbrhbr..',
+  '.....rbbrbbr..',
+  '......rr.rr...',
+];
 
 export async function loadGameTextures() {
   const files = [...Object.values(BRICK_TEXTURES), ...Object.values(SPRITE_TEXTURES)].map((path) => ({
@@ -84,20 +96,33 @@ const digits = [
   ['.###.', '##.##', '##.##', '.###.', '##.##', '##.##', '.###.'],
   ['.###.', '##.##', '##.##', '.####', '...##', '...##', '.###.'],
 ];
+const numberSymbols = {
+  '+': ['.....', '..#..', '..#..', '#####', '..#..', '..#..', '.....'],
+  ':': ['.....', '..##.', '..##.', '.....', '..##.', '..##.', '.....'],
+};
 
-export function drawScore(canvas, value) {
+export function drawScore(canvas, value, { color = '#ffcb70', outline } = {}) {
   const digitWidth = digits[0][0].length;
   const advance = digitWidth + 2;
-  canvas.width = advance * value.length - 2;
+  const padding = outline ? 1 : 0;
+  canvas.width = advance * value.length - 2 + padding * 2;
+  canvas.height = digits[0].length + padding * 2;
   const context = canvas.getContext('2d');
-  context.fillStyle = '#ffcb70';
-  for (const [index, digit] of [...value].entries()) {
-    for (const [row, line] of digits[Number(digit)].entries()) {
+  const pixels = [];
+  for (const [index, symbol] of [...value].entries()) {
+    const rows = numberSymbols[symbol] ?? digits[Number(symbol)];
+    for (const [row, line] of rows.entries()) {
       for (const match of line.matchAll(/#+/g)) {
-        context.fillRect(index * advance + match.index, row, match[0].length, 1);
+        pixels.push([index * advance + match.index + padding, row + padding, match[0].length]);
       }
     }
   }
+  if (outline) {
+    context.fillStyle = outline;
+    for (const [x, y, width] of pixels) context.fillRect(x - 1, y - 1, width + 2, 3);
+  }
+  context.fillStyle = color;
+  for (const [x, y, width] of pixels) context.fillRect(x, y, width, 1);
 }
 
 function glyph(graphic, rows, x, y, size, color) {
@@ -240,24 +265,26 @@ function drawBrickFace(graphic, brick, textures) {
     (kind === 'tnt' ? 1.65 : 1.45) * scale, brickIconColor(color));
 }
 
-function drawPlatform(graphic, x, y, width, height, { face, edge, shadow }) {
-  pixelPanel(graphic, x, y, width, height + 2, 2, ink);
-  pixelPanel(graphic, x + 1, y, width - 2, height, 2, shadow);
-  graphic.rect(x + 3, y + 1, width - 6, height - 4).fill(face)
+function drawPlatform(graphic, x, y, width, height, { face, edge, shadow }, faceHeight = height - 6) {
+  pixelPanel(graphic, x, y, width, height, 2, ink);
+  pixelPanel(graphic, x + 1, y, width - 2, height - 2, 2, shadow);
+  graphic.rect(x + 3, y + 1, width - 6, faceHeight).fill(face)
     .rect(x + 3, y, width - 6, 2).fill(edge);
 }
 
 export function makePaddle() {
-  const graphic = new Graphics();
+  const paddle = new Container();
+  const body = new Graphics();
+  const holly = new Graphics();
   const { width, height } = PADDLE;
-  drawPlatform(graphic, -width / 2, 0, width, height, paddlePalette);
-
-  // A small holly sprig fits inside the face at every paddle width.
-  graphic.rect(-7, 3, 5, 3).rect(-5, 6, 4, 2)
-    .rect(2, 6, 5, 3).rect(2, 4, 3, 2).fill(0x2c513b)
-    .rect(-6, 4, 3, 2).rect(3, 6, 3, 2).fill(0xbac287)
-    .rect(-2, 4, 3, 3).rect(0, 7, 2, 2).fill(0xf2be90);
-  return graphic;
+  drawPlatform(body, -width / 2, 0, width, height, paddlePalette, height - 4);
+  const hollyCenterY = Math.floor((height - hollyPixels.length) / 2) + hollyPixels.length / 2;
+  for (const [pixel, color] of Object.entries(hollyPalette)) {
+    const rows = hollyPixels.map((line) => [...line].map((value) => value === pixel ? '#' : '.').join(''));
+    glyph(holly, rows, 0, hollyCenterY, 1, color);
+  }
+  paddle.addChild(body, holly);
+  return { paddle, body };
 }
 
 export function makeCannon() {
@@ -313,9 +340,39 @@ export function drawBall(graphic, x, y, bonus, textures) {
 }
 
 export function drawRail(graphic, x, y, width, height, kind, warning) {
-  drawPlatform(graphic, x, y, width, height - 2, railPalettes[kind]);
+  drawPlatform(graphic, x, y, width, height, railPalettes[kind]);
   if (warning > 0) {
     graphic.rect(x + 3, y, width - 6, 2).fill({ color: cream, alpha: warning * 0.55 });
+  }
+}
+
+const paddleSparkSpread = [
+  [-28, 2, 3, 0xf6b866],
+  [-18, 5, 2, 0xffdc96],
+  [-12, 1, 2, 0xffe9ab],
+  [12, 1, 2, 0xffe9ab],
+  [19, 5, 3, 0xffcf74],
+  [28, 2, 2, 0xffb765],
+];
+
+export function drawPaddleImpact(graphic, x, y, progress, reduced) {
+  const centerX = Math.round(x);
+  const top = Math.round(y);
+  const remaining = 1 - progress;
+  const coreAlpha = reduced ? remaining * 0.8 : Math.max(0, 1 - progress * 2.5);
+  if (coreAlpha > 0) {
+    graphic.rect(centerX - 5, top, 11, 2).fill({ color: cream, alpha: coreAlpha });
+  }
+  if (reduced) return;
+
+  // Begin outside the ball's silhouette and spread out along the paddle.
+  const innerGap = BALL_RADIUS + 2;
+  const spread = 1 - 0.58 * remaining ** 2;
+  const alpha = remaining ** 1.1;
+  for (const [distance, lift, size, color] of paddleSparkSpread) {
+    const offset = Math.sign(distance) * (innerGap + Math.round((Math.abs(distance) - innerGap) * spread));
+    graphic.rect(centerX + offset - Math.floor(size / 2), top - size - Math.round(lift * spread), size, size)
+      .fill({ color, alpha });
   }
 }
 

@@ -15,14 +15,10 @@
     <main class="game-shell">
       <section class="game-frame" aria-label="打磚塊遊戲">
         <header class="topbar">
-          <div class="game-hud" role="group" aria-label="遊戲資訊">
-            <div class="hud-stat">
-              <span class="stat-label" id="time-label">剩餘時間</span><output class="time-number" id="time-left" role="timer" aria-labelledby="time-label">2:00</output>
-            </div>
-            <div class="hud-stat">
-              <span class="stat-label">最高分</span><output id="best" aria-live="off">00000</output>
-            </div>
-          </div>
+          <output class="time-number" id="time-left" role="timer" aria-label="剩餘時間">
+            <span class="sr-only" id="time-value">2:00</span>
+            <canvas id="time-pixels" width="26" height="7" aria-hidden="true"></canvas>
+          </output>
 
           <div class="toolbar" role="group" aria-label="遊戲選項">
             <button class="button" id="help" type="button" aria-haspopup="dialog" disabled>
@@ -89,7 +85,7 @@
         </header>
         <div class="help-content">
           <p>用球拍接住球，打碎所有磚塊即可過關。每塊磚值 30 分，第一、二、三關通關分別加 1,000、1,500、2,000 分。TNT 會一次顯示自己和炸碎磚塊的合計分數。</p>
-          <p>一局有 2 分鐘和 3 條命。第一次發球後開始倒數，補發球和換關也會計時。從第一關打完三關，每剩下完整 1 秒加 20 分。</p>
+          <p>一局有 2 分鐘和 3 條命。第一次發球後開始倒數，等待補發球時也會計時。過關時暫停倒數，按下「下一關」發球後繼續。從第一關打完三關，每剩下完整 1 秒加 20 分。</p>
           <h3>操作方式</h3>
           <dl class="control-guide">
             <div><dt>移動</dt><dd><kbd>←</kbd> <kbd>→</kbd>、滑鼠移動或左右拖曳</dd></div>

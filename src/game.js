@@ -5,7 +5,7 @@ export const LIVES = 3;
 export const ROUND_SECONDS = 120;
 export const TIME_BONUS_RATE = 20;
 export const BALL_RADIUS = 7;
-export const PADDLE = { width: 112, height: 13, y: 447 };
+export const PADDLE = { width: 112, height: 16, y: 447 };
 export const DROP_RADIUS = 11;
 export const GUARD = { y: 470, width: 210, height: 8 };
 export const BARRIER = { y: 230, width: WIDTH / 3, height: 9, duration: 6 };
@@ -358,7 +358,7 @@ export class Game {
   }
 
   stageBall() {
-    this.balls = [{ x: this.paddleX, y: this.paddleY - BALL_RADIUS - 4, vx: 0, vy: 0 }];
+    this.balls = [{ x: this.paddleX, y: this.paddleY - BALL_RADIUS, vx: 0, vy: 0 }];
   }
 
   effectTimeLeft(kind) {

@@ -1,6 +1,6 @@
 import { Application, Container, Graphics } from 'pixi.js';
 import { BALL_RADIUS, BARRIER, CANNON, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
-import { assist, bonusBallColor, brickColor, drawBall, drawBrick, drawDrop, drawHardCrack, drawRail, drawScore, drawShot, drawSpark, loadGameTextures, makeCannon, makePaddle } from './art.js';
+import { assist, bonusBallColor, brickColor, drawBall, drawBrick, drawDrop, drawHardCrack, drawPaddleImpact, drawRail, drawScore, drawShot, drawSpark, loadGameTextures, makeCannon, makePaddle } from './art.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
@@ -17,23 +17,23 @@ const fullscreenButton = byId('fullscreen');
 const score = byId('score');
 const scoreValue = byId('score-value');
 const scorePixels = byId('score-pixels');
-const clock = byId('time-left');
+const clockValue = byId('time-value');
+const clockPixels = byId('time-pixels');
 const levelBonus = byId('level-bonus');
 const timeBonus = byId('time-bonus');
 const scorePopups = byId('score-popups');
-const best = byId('best');
 const lives = byId('lives');
 const lifeLossFlash = byId('life-loss-flash');
 const announcement = byId('announcement');
 const hearts = [...lives.children];
 
-const scoreKey = 'arkanoid.best';
 const blastDuration = 0.28;
 const shakeDuration = 0.18;
 const sparkDuration = 0.28;
 const hardFlashDuration = 0.19;
 const ballFlashDuration = 0.26;
 const paddleImpactDuration = 0.18;
+const paddleImpactAnchor = 13;
 const multiballScoreLift = 34;
 const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護', cannons: '雙側砲台' };
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -81,16 +81,6 @@ const tones = {
   miss: [270, 100, 0.23],
 };
 
-function readBest() {
-  try {
-    const saved = Number(localStorage.getItem(scoreKey));
-    return Number.isSafeInteger(saved) && saved > 0 ? saved : 0;
-  } catch {
-    return 0;
-  }
-}
-
-let bestScore = readBest();
 let audio;
 let soundEnabled = false;
 let explosionNoise;
@@ -145,9 +135,10 @@ function playSound(event) {
 }
 
 function showScorePopup({ width, height }, points, x, y) {
-  const popup = document.createElement('span');
+  const popup = document.createElement('canvas');
   popup.className = 'brick-score';
   popup.textContent = `+${points}`;
+  drawScore(popup, popup.textContent, { color: '#fff2cf', outline: '#21190f' });
   popup.style.left = `${x / width * 100}%`;
   popup.style.top = `${y / height * 100}%`;
   popup.addEventListener('animationend', () => popup.remove(), { once: true });
@@ -190,7 +181,7 @@ async function init() {
   const bricks = new Container();
   const trail = new Graphics();
   const particles = new Graphics();
-  const paddle = makePaddle();
+  const { paddle, body: paddleBody } = makePaddle();
   const leftCannon = makeCannon();
   const rightCannon = leftCannon.clone();
   const balls = new Graphics();
@@ -316,8 +307,9 @@ async function init() {
     const secondsLeft = showTimeBonus ? bonusSeconds : Math.ceil(game.timeLeft);
     if (displayedTime !== secondsLeft) {
       displayedTime = secondsLeft;
-      clock.textContent = `${Math.floor(secondsLeft / 60)}:${number(secondsLeft % 60, 2)}`;
-      clock.classList.toggle('time-low', secondsLeft <= 10);
+      const display = `${Math.floor(secondsLeft / 60)}:${number(secondsLeft % 60, 2)}`;
+      clockValue.textContent = display;
+      drawScore(clockPixels, display, { color: secondsLeft <= 10 ? '#ff9eab' : '#91ead3' });
     }
     let levelChanged = false;
     if (displayedBricks !== game.bricks) {
@@ -352,11 +344,6 @@ async function init() {
         ], { duration: 240, easing: 'ease-out' });
       }
       displayedScore = game.score;
-      if (game.score > bestScore) {
-        bestScore = game.score;
-        best.textContent = number(bestScore, 5);
-        try { localStorage.setItem(scoreKey, String(bestScore)); } catch { /* Keep the record for this session. */ }
-      }
     }
 
     if (displayedLives !== game.lives) {
@@ -418,8 +405,9 @@ async function init() {
         ? -0.34 * (1 - progress / 0.4) ** 2
         : 0.13 * Math.sin((progress - 0.4) / 0.6 * Math.PI);
     }
-    paddle.position.set(game.paddleX, game.paddleY - PADDLE.height * stretch);
-    paddle.scale.set(game.paddleWidth / PADDLE.width * (1 - stretch * 0.16), 1 + stretch);
+    paddle.position.set(game.paddleX, game.paddleY - paddleImpactAnchor * stretch);
+    paddle.scale.y = 1 + stretch;
+    paddleBody.scale.x = game.paddleWidth / PADDLE.width * (1 - stretch * 0.16);
 
     leftCannon.visible = rightCannon.visible = game.effectTimeLeft('cannons') > 0;
     if (leftCannon.visible) {
@@ -430,10 +418,7 @@ async function init() {
 
     paddleStars.clear();
     for (const { x, y, age } of paddleImpacts) {
-      const progress = age / paddleImpactDuration;
-      const alpha = 1 - progress ** 2;
-      const radius = reduced ? 8 : 9 + 3 * Math.sin(progress * Math.PI);
-      drawSpark(paddleStars, x, y, radius, 0xffd48a, alpha);
+      drawPaddleImpact(paddleStars, x, y, age / paddleImpactDuration, reduced);
     }
   }
 
@@ -663,7 +648,6 @@ async function init() {
 
   byId('level-total').textContent = ` / ${number(LEVELS, 2)}`;
   levelSelect.replaceChildren(...LEVEL_NAMES.map((name, index) => new Option(`${number(index + 1, 2)} · ${name}`, index + 1)));
-  best.textContent = number(bestScore, 5);
   actionButton.disabled = false;
   helpButton.disabled = false;
   soundButton.disabled = !(window.AudioContext || window.webkitAudioContext);

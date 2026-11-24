@@ -208,8 +208,9 @@ test('bricks in a newly selected wide layout collide at their extended edge', ()
 
 test('changing court height keeps the paddle and its collisions aligned', () => {
   const game = new Game(() => {});
+  assert.equal(game.balls[0].y + BALL_RADIUS, game.paddleY);
   game.resize(WIDTH, HEIGHT + 100);
-  assert.equal(game.balls[0].y, game.paddleY - BALL_RADIUS - 4);
+  assert.equal(game.balls[0].y + BALL_RADIUS, game.paddleY);
   game.action();
   game.activateBuff('cannons');
   const [ball] = game.balls;
@@ -257,6 +258,7 @@ test('the countdown runs after a miss and pauses until the next level launches',
   game.update(0.01);
   assert.equal(game.phase, 'serve');
   assert.equal(game.lives, LIVES - 1);
+  assert.equal(game.balls[0].y + BALL_RADIUS, game.paddleY);
   const timeBeforeServe = game.timeLeft;
   game.update(3);
   assert.equal(game.timeLeft, timeBeforeServe - 3);
