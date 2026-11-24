@@ -209,7 +209,7 @@ test('changing court height keeps the paddle and its collisions aligned', () => 
   assert(game.shots.every(({ y }) => y > CANNON.muzzleY));
 });
 
-test('the round counts uncapped elapsed time after launch, freezes on pause, and resets on replay', () => {
+test('the round counts uncapped elapsed time after launch and resets on replay', () => {
   const game = new Game(() => {});
   game.update(20);
   assert.equal(game.timeLeft, ROUND_SECONDS);
@@ -218,13 +218,8 @@ test('the round counts uncapped elapsed time after launch, freezes on pause, and
   game.hitBrick(game.bricks.find(({ kind }) => kind === 'standard'));
   game.update(0.02, { elapsedSeconds: 12.5 });
   assert(Math.abs(game.timeLeft - 77.5) < 1e-9);
-  game.togglePause();
-  const pausedTime = game.timeLeft;
-  game.update(0.02, { elapsedSeconds: 120 });
-  assert.equal(game.timeLeft, pausedTime);
-  assert.equal(game.phase, 'paused');
-
   game.action();
+  assert.equal(game.phase, 'playing');
   game.activateBuff('guards');
   game.update(0.02, { elapsedSeconds: 77.5 });
   assert.equal(game.phase, 'time-up');
@@ -253,10 +248,8 @@ test('the same countdown and lives carry through a missed ball and a level chang
   game.update(3);
   assert.equal(game.timeLeft, timeBeforeServe - 3);
 
-  game.togglePause();
   game.update(30);
-  assert.equal(game.timeLeft, timeBeforeServe - 3);
-  game.action();
+  assert.equal(game.timeLeft, timeBeforeServe - 33);
   assert.equal(game.phase, 'serve');
   game.action();
 
@@ -487,10 +480,8 @@ test('a caught cannon buff fires from both ends only when the paddle bounces a b
   assert(game.shots.every(({ y, vx, vy }) => y < CANNON.muzzleY && vx === 0 && vy < 0));
 
   const shotPositions = game.shots.map(({ y }) => y);
-  game.togglePause();
-  game.update(0.2);
-  assert.deepEqual(game.shots.map(({ y }) => y), shotPositions);
-  game.togglePause();
+  game.update(0.02);
+  assert(game.shots.every(({ y }, index) => y < shotPositions[index]));
   sendBallOut(ball);
   game.update(0.01);
   assert.equal(game.effectTimeLeft('cannons'), 0);
@@ -606,11 +597,8 @@ test('TNT waits for its fuse, hits nearby bricks once, and lights other TNT', ()
   game.update(TNT.delay - 0.02);
   game.hitBrick(center);
   assert.equal(center.detonatesAt, fuse);
-  game.togglePause();
-  game.update(1);
   assert(center.active && standard.active);
 
-  game.togglePause();
   game.update(0.03);
   assert.equal(center.active, false);
   assert.equal(standard.active, false);
@@ -770,16 +758,12 @@ test('each raised barrier segment stops one upward attack without scoring or blo
   assert.equal(game.remaining, count);
 
   const timeLeft = game.effectTimeLeft('barrier');
-  game.togglePause();
-  game.update(BARRIER.duration);
-  assert.equal(game.effectTimeLeft('barrier'), timeLeft);
-  game.togglePause();
   game.update(timeLeft + 0.01);
   assert.equal(game.effectTimeLeft('barrier'), 0);
   assert.equal(game.barriers.length, 0);
 });
 
-test('timed buffs coexist, refresh, freeze on pause, and expire in play', () => {
+test('timed buffs coexist, refresh, and expire in play', () => {
   const game = startGame();
   game.balls[0].vx = 0;
   game.balls[0].vy = 0;
@@ -790,11 +774,8 @@ test('timed buffs coexist, refresh, freeze on pause, and expire in play', () => 
   const x = game.paddleX;
   game.update(0.1, { pointerX: x + 400 });
   assert(game.paddleX - x > normalSpeed * 1.6 * 0.1);
-  game.togglePause();
   const remaining = game.effectTimeLeft('wide');
-  game.update(20);
-  assert.equal(game.effectTimeLeft('wide'), remaining);
-  game.togglePause();
+  assert(remaining < BUFF_DURATION);
   game.activateBuff('fast');
   assert(game.effectTimeLeft('fast') > remaining);
   game.update(BUFF_DURATION + 0.01);

@@ -15,29 +15,12 @@
     <main class="game-shell">
       <section class="game-frame" aria-label="打磚塊遊戲">
         <header class="topbar">
-          <div class="brand">
-            <i class="brand-icon" aria-hidden="true"></i>
-            <div>
-              <h1>GIRAFFE <span>打磚塊</span></h1>
-              <p>東勢長頸鹿美語</p>
-            </div>
-          </div>
-
           <div class="game-hud" role="group" aria-label="遊戲資訊">
-            <div class="hud-stat score-current">
-              <span class="stat-label">分數</span><output class="score-number" id="score" aria-live="off">00000</output>
-            </div>
             <div class="hud-stat">
               <span class="stat-label" id="time-label">剩餘時間</span><output class="time-number" id="time-left" role="timer" aria-labelledby="time-label">1:30</output>
             </div>
             <div class="hud-stat">
               <span class="stat-label">最高分</span><output id="best" aria-live="off">00000</output>
-            </div>
-            <div class="hud-stat">
-              <span class="stat-label">生命</span>
-              <div class="hearts" id="lives" role="img" aria-label="剩下 3 條命">
-                <i class="heart" aria-hidden="true"></i><i class="heart" aria-hidden="true"></i><i class="heart" aria-hidden="true"></i>
-              </div>
             </div>
           </div>
 
@@ -57,6 +40,12 @@
         <div class="field-stage">
           <div class="art-slot logo-slot"></div>
           <div id="field" class="field" tabindex="0" aria-label="遊戲畫面" aria-describedby="controls">
+            <div class="arcade-hud" role="group" aria-label="本局資訊">
+              <output class="score-number" id="score" aria-live="off" aria-label="本局分數">00000</output>
+              <div class="hearts" id="lives" role="img" aria-label="剩下 3 條命">
+                <i class="heart" aria-hidden="true"></i><i class="heart" aria-hidden="true"></i><i class="heart" aria-hidden="true"></i>
+              </div>
+            </div>
             <div class="canvas-layer" id="canvas-layer" aria-hidden="true"></div>
             <div class="life-loss-flash" id="life-loss-flash" aria-hidden="true" hidden></div>
             <div class="overlay" id="overlay">
@@ -76,46 +65,16 @@
         </div>
 
         <footer class="game-deck">
-          <div class="deck-controls">
-            <div class="deck-level">
-              <label class="level-picker" id="level-picker" hidden>
-                <span class="stat-label">選擇關卡</span><select id="level-select"></select>
-              </label>
-              <div class="level-readout" id="level-readout">
-                <span class="stat-label">關卡</span><span class="figures"><strong id="level">01</strong><span id="level-total"> / 03</span></span>
-              </div>
-            </div>
-            <div class="brick-status">
-              <div><span class="stat-label" id="brick-label">剩餘磚塊</span><span class="figures" id="remaining">54</span></div>
-              <progress id="progress" aria-labelledby="brick-label" max="54" value="54"></progress>
-            </div>
-            <div class="deck-actions">
-              <button class="button pause-button" id="pause" type="button" disabled hidden>
-                <i class="pause-icon" aria-hidden="true"></i><span id="pause-label">暫停</span>
-              </button>
-              <button class="button" id="restart" type="button" disabled>
-                <i class="restart-icon" aria-hidden="true">↻</i><span>重新開始</span>
-              </button>
-            </div>
-          </div>
-          <div class="match-status">
-            <div class="game-status">
-              <span class="status-light" aria-hidden="true"></span><span id="status">準備就緒</span>
-              <span class="ball-count" id="ball-count" hidden></span>
-            </div>
-            <ul class="buff-list" id="buff-list" aria-label="限時效果" hidden>
-              <li id="buff-wide" hidden><span>球拍加長</span><span class="buff-time"></span></li>
-              <li id="buff-fast" hidden><span>球拍加速</span><span class="buff-time"></span></li>
-              <li id="buff-guards" hidden><span>底線保護 <span id="guard-count"></span></span><span class="buff-time"></span></li>
-              <li id="buff-cannons" hidden><span>雙側砲台</span><span class="buff-time"></span></li>
-              <li id="buff-shrink" class="nerf-effect" hidden><span>球拍縮短</span><span class="buff-time"></span></li>
-              <li id="buff-barrier" class="nerf-effect" hidden><span>磚陣攔截</span><span class="buff-time"></span></li>
-            </ul>
+          <label class="level-picker" id="level-picker" hidden>
+            <span class="stat-label">選擇關卡</span><select id="level-select"></select>
+          </label>
+          <div class="level-readout" id="level-readout">
+            <span class="stat-label">關卡</span><span class="figures"><strong id="level">01</strong><span id="level-total"> / 03</span></span>
           </div>
         </footer>
       </section>
 
-      <p class="sr-only" id="controls">用方向鍵或滑鼠移動球拍，空白鍵發球，Escape 暫停。觸控時左右拖曳移動，輕點發球。</p>
+      <p class="sr-only" id="controls">用方向鍵或滑鼠移動球拍，空白鍵發球。觸控時左右拖曳移動，輕點發球。</p>
       <p class="sr-only" id="announcement" role="status"></p>
 
       <dialog class="help-dialog" id="help-dialog" aria-labelledby="help-title">
@@ -127,12 +86,11 @@
         </header>
         <div class="help-content">
           <p>用球拍接住球，打碎所有磚塊即可過關。每塊磚值 30 分，第一、二、三關通關分別加 1,000、1,500、2,000 分。TNT 會一次顯示自己和炸碎磚塊的合計分數。</p>
-          <p>一局有 90 秒和 3 條命。第一次發球後開始倒數，補發球和換關也會計時，暫停時倒數停止。從第一關打完三關，每剩下完整 1 秒加 20 分。</p>
+          <p>一局有 90 秒和 3 條命。第一次發球後開始倒數，補發球和換關也會計時。從第一關打完三關，每剩下完整 1 秒加 20 分。</p>
           <h3>操作方式</h3>
           <dl class="control-guide">
             <div><dt>移動</dt><dd><kbd>←</kbd> <kbd>→</kbd>、滑鼠移動或左右拖曳</dd></div>
             <div><dt>發球</dt><dd><kbd>Space</kbd> 或輕點球場</dd></div>
-            <div><dt>暫停</dt><dd><kbd>Esc</kbd> 或「暫停」按鈕</dd></div>
           </dl>
           <h3>特殊磚塊</h3>
           <ul class="brick-legend">

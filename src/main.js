@@ -1,16 +1,14 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import { BALL_RADIUS, BARRIER, BUFFS, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
+import { BALL_RADIUS, BARRIER, CANNON, DROP_RADIUS, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
 const frame = field.closest('.game-frame');
 const overlay = byId('overlay');
 const actionButton = byId('action');
-const pauseButton = byId('pause');
 const levelPicker = byId('level-picker');
 const levelSelect = byId('level-select');
 const levelReadout = byId('level-readout');
-const restartButton = byId('restart');
 const soundButton = byId('sound');
 const helpButton = byId('help');
 const helpDialog = byId('help-dialog');
@@ -22,17 +20,9 @@ const timeBonus = byId('time-bonus');
 const scorePopups = byId('score-popups');
 const best = byId('best');
 const lives = byId('lives');
-const progress = byId('progress');
-const ballCount = byId('ball-count');
 const lifeLossFlash = byId('life-loss-flash');
-const buffList = byId('buff-list');
-const guardCount = byId('guard-count');
 const announcement = byId('announcement');
 const hearts = [...lives.children];
-const effectRows = [...BUFFS, 'shrink', 'barrier'].map((kind) => {
-  const row = byId(`buff-${kind}`);
-  return { kind, row, timer: row.querySelector('.buff-time') };
-});
 
 const scoreKey = 'arkanoid.best';
 const hues = [0xfd798f, 0xffa069, 0xffd86b, 0x70dfcd, 0xa895ff];
@@ -75,7 +65,6 @@ const screens = {
   playing: { status: '遊戲進行中' },
   'life-loss': { status: '漏接' },
   serve: { status: '等待發球', title: '再發一球', button: '發球' },
-  paused: { status: '已暫停', title: '遊戲暫停', button: '繼續遊戲' },
   'level-clear': { status: '關卡完成', title: '關卡完成！', button: '下一關' },
   lost: { status: '遊戲結束', title: '遊戲結束', button: '再玩一次' },
   'time-up': { status: '時間到', title: '時間到！', button: '再玩一次' },
@@ -419,11 +408,9 @@ async function init() {
   let displayedTime;
   let scorePulse;
   let displayedLives;
-  let displayedRemaining;
-  let displayedBallCount;
-  let displayedGuardCount;
   let pointerX;
-  let clockResumedAt = -Infinity;
+  let gesture;
+  let clockStartedAt = -Infinity;
 
   function startLifeLoss(x) {
     const reduced = reducedMotion.matches;
@@ -435,11 +422,11 @@ async function init() {
 
     heartPulse?.cancel();
     const frames = reduced
-      ? [{ backgroundColor: '#a73450' }, { backgroundColor: '#45516a' }]
+      ? [{ backgroundColor: '#a73450' }, { backgroundColor: 'var(--empty-heart)' }]
       : [
           { transform: 'scale(1)', backgroundColor: '#f8647f' },
           { transform: 'scale(.58)', backgroundColor: '#a73450', offset: 0.47 },
-          { transform: 'scale(1)', backgroundColor: '#45516a' },
+          { transform: 'scale(1)', backgroundColor: 'var(--empty-heart)' },
         ];
     heartPulse = hearts[game.lives].animate(frames, { duration: duration * 1000, easing: 'ease-out' });
   }
@@ -455,30 +442,7 @@ async function init() {
     lifeLossFlash.style.opacity = Math.min(1, lifeLoss.remaining / (lifeLoss.duration * 0.72));
   }
 
-  function syncPowerHud() {
-    if (displayedBallCount !== game.balls.length) {
-      displayedBallCount = game.balls.length;
-      ballCount.hidden = displayedBallCount <= 1;
-      ballCount.textContent = ballCount.hidden ? '' : `場上 ${displayedBallCount} 球`;
-    }
-    if (displayedGuardCount !== game.guards.length) {
-      displayedGuardCount = game.guards.length;
-      guardCount.textContent = `${displayedGuardCount} 個`;
-    }
-    let active = false;
-    for (const { kind, row, timer } of effectRows) {
-      const seconds = Math.ceil(game.effectTimeLeft(kind));
-      row.hidden = seconds === 0;
-      if (row.hidden) continue;
-      active = true;
-      const label = `${seconds} 秒`;
-      if (timer.textContent !== label) timer.textContent = label;
-    }
-    buffList.hidden = !active;
-  }
-
   function syncHud() {
-    syncPowerHud();
     const showTimeBonus = game.phase === 'won' && game.startLevel === 1;
     const bonusSeconds = game.timeBonus / TIME_BONUS_RATE;
     const secondsLeft = showTimeBonus ? bonusSeconds : Math.ceil(game.timeLeft);
@@ -503,7 +467,6 @@ async function init() {
       displayedBricks = game.bricks;
       byId('level').textContent = number(game.level, 2);
       levelSelect.value = String(game.startLevel);
-      progress.max = game.bricks.length;
       field.style.setProperty('--layout-bottom', `${game.layoutBottom / game.height * 100}%`);
       levelChanged = true;
     }
@@ -532,12 +495,6 @@ async function init() {
       displayedLives = game.lives;
     }
 
-    if (levelChanged || displayedRemaining !== game.remaining) {
-      byId('remaining').textContent = game.remaining;
-      progress.value = game.remaining;
-      displayedRemaining = game.remaining;
-    }
-
     if (lifeLoss && game.phase === 'time-up') {
       lifeLoss = undefined;
       lifeLossFlash.hidden = true;
@@ -548,14 +505,10 @@ async function init() {
     const wasPlaying = displayedPhase === 'playing' || displayedPhase === 'life-loss';
     displayedPhase = phase;
     frame.dataset.phase = phase;
-    byId('status').textContent = screen.status;
     announcement.textContent = phase === 'serve' ? `剩下 ${game.lives} 條命。${screen.title}。` : screen.status;
     overlay.hidden = phase === 'playing' || phase === 'life-loss';
     levelPicker.hidden = phase !== 'ready';
     levelReadout.hidden = phase === 'ready';
-    pauseButton.hidden = phase === 'ready';
-    pauseButton.disabled = !game.countdownRunning && phase !== 'paused';
-    byId('pause-label').textContent = phase === 'paused' ? '繼續' : '暫停';
     if (overlay.hidden) return;
     pointerX = undefined;
     byId('message').textContent = phase === 'ready' ? LEVEL_NAMES[game.level - 1] : screen.title;
@@ -574,7 +527,7 @@ async function init() {
 
   function primaryAction() {
     if (lifeLoss) return;
-    if (!game.countdownRunning) clockResumedAt = performance.now();
+    if (!game.countdownRunning) clockStartedAt = performance.now();
     game.action();
     syncHud();
     field.focus({ preventScroll: true });
@@ -693,11 +646,9 @@ async function init() {
 
   function renderBrickEffects(seconds) {
     const reduced = reducedMotion.matches;
-    const paused = game.phase === 'paused';
-    const elapsed = paused ? 0 : seconds;
     particles.clear();
     for (const blast of blasts) {
-      blast.life -= elapsed;
+      blast.life -= seconds;
       if (blast.life <= 0) continue;
       const fade = blast.life / blastDuration;
       const radius = reduced ? TNT.radius : TNT.radius * (1 - 0.55 * fade);
@@ -709,7 +660,7 @@ async function init() {
 
     let offset = '';
     const latestBlast = blasts.at(-1);
-    if (latestBlast && !reduced && !paused) {
+    if (latestBlast && !reduced) {
       const progress = (blastDuration - latestBlast.life) / shakeDuration;
       if (progress < 1) {
         const decay = (1 - progress) ** 2;
@@ -725,7 +676,7 @@ async function init() {
     }
 
     for (const flash of durabilityFlashes) {
-      flash.life -= elapsed;
+      flash.life -= seconds;
       const { brick, life, index } = flash;
       if (!brick.active || life <= 0) continue;
       const faceHeight = brick.height - Math.min(4, brick.height / 4);
@@ -735,11 +686,11 @@ async function init() {
     durabilityFlashes = durabilityFlashes.filter(({ brick, life }) => brick.active && life > 0);
 
     for (const spark of sparks) {
-      spark.life -= elapsed;
+      spark.life -= seconds;
       if (spark.life <= 0) continue;
       if (!reduced) {
-        spark.x += spark.vx * elapsed;
-        spark.y += spark.vy * elapsed;
+        spark.x += spark.vx * seconds;
+        spark.y += spark.vy * seconds;
       }
       const { x, y, color, shardX, shardY } = spark;
       const alpha = spark.life / sparkDuration;
@@ -750,7 +701,7 @@ async function init() {
           x - shardX, y - shardY,
           x + shardY * 0.45, y - shardX * 0.45,
         ]).fill({ color, alpha }).stroke({ color: 0xeaffff, width: 0.75, alpha });
-      } else if (!paused && !reduced) {
+      } else if (!reduced) {
         particles.rect(x, y, 4, 4).fill({ color, alpha });
       }
     }
@@ -758,33 +709,23 @@ async function init() {
   }
 
   app.ticker.add((ticker) => {
-    const elapsedSeconds = Math.min(ticker.elapsedMS, performance.now() - clockResumedAt) / 1000;
+    const elapsedSeconds = Math.min(ticker.elapsedMS, performance.now() - clockStartedAt) / 1000;
     const seconds = Math.min(ticker.deltaMS / 1000, elapsedSeconds, 0.04);
     const direction = Number(rightKeys.some((key) => keys.has(key))) - Number(leftKeys.some((key) => keys.has(key)));
     updateLifeLoss(seconds);
-    if (game.phase !== 'paused') {
-      if (paddleImpacts.length > 0) {
-        for (const impact of paddleImpacts) impact.age += seconds;
-        paddleImpacts = paddleImpacts.filter(({ age }) => age < paddleImpactDuration);
-      }
-      for (const [ball, life] of ballFlashes) {
-        if (life <= seconds) ballFlashes.delete(ball);
-        else ballFlashes.set(ball, life - seconds);
-      }
+    if (paddleImpacts.length > 0) {
+      for (const impact of paddleImpacts) impact.age += seconds;
+      paddleImpacts = paddleImpacts.filter(({ age }) => age < paddleImpactDuration);
+    }
+    for (const [ball, life] of ballFlashes) {
+      if (life <= seconds) ballFlashes.delete(ball);
+      else ballFlashes.set(ball, life - seconds);
     }
     game.update(seconds, { direction, pointerX, elapsedSeconds });
     syncHud();
     renderPlayfield();
     renderBrickEffects(seconds);
   });
-
-  function togglePause() {
-    if (game.phase === 'paused') clockResumedAt = performance.now();
-    game.togglePause();
-    syncHud();
-    if (game.phase === 'playing') field.focus({ preventScroll: true });
-    if (game.phase === 'paused') actionButton.focus({ preventScroll: true });
-  }
 
   window.addEventListener('keydown', (event) => {
     if (helpDialog.open || event.ctrlKey || event.metaKey || event.altKey || event.target === levelSelect) return;
@@ -797,23 +738,19 @@ async function init() {
       event.preventDefault();
       if (!event.repeat && game.phase !== 'playing') primaryAction();
     }
-    if (event.code === 'Escape' && !event.repeat) togglePause();
   });
   window.addEventListener('keyup', (event) => keys.delete(event.code));
 
-  function pauseOnLeave() {
+  function clearMovement() {
     keys.clear();
-    if (game.countdownRunning) {
-      game.togglePause();
-      syncHud();
-    }
+    pointerX = undefined;
+    gesture = undefined;
   }
-  window.addEventListener('blur', pauseOnLeave);
+  window.addEventListener('blur', clearMovement);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pauseOnLeave();
+    if (document.hidden) clearMovement();
   });
 
-  let gesture;
   function moveToPointer(event) {
     const bounds = field.getBoundingClientRect();
     const x = (event.clientX - bounds.left) / bounds.width * game.width;
@@ -845,24 +782,15 @@ async function init() {
   field.addEventListener('lostpointercapture', () => { gesture = undefined; });
 
   actionButton.addEventListener('click', primaryAction);
-  pauseButton.addEventListener('click', togglePause);
   helpButton.addEventListener('click', () => {
-    pauseOnLeave();
+    clearMovement();
     helpDialog.showModal();
   });
   levelSelect.addEventListener('change', () => {
     if (game.phase !== 'ready') return;
-    keys.clear();
-    pointerX = undefined;
+    clearMovement();
     game.reset(Number(levelSelect.value));
     syncHud();
-  });
-  restartButton.addEventListener('click', () => {
-    keys.clear();
-    pointerX = undefined;
-    game.reset(game.startLevel);
-    syncHud();
-    actionButton.focus({ preventScroll: true });
   });
   soundButton.addEventListener('click', async () => {
     soundEnabled = !soundEnabled;
@@ -902,7 +830,6 @@ async function init() {
   best.textContent = number(bestScore, 5);
   actionButton.disabled = false;
   helpButton.disabled = false;
-  restartButton.disabled = false;
   soundButton.disabled = !(window.AudioContext || window.webkitAudioContext);
   syncHud();
 
@@ -933,7 +860,7 @@ async function init() {
 
 init().catch((error) => {
   console.error(error);
-  byId('status').textContent = '無法載入';
+  announcement.textContent = '遊戲載入失敗';
   byId('message').textContent = '遊戲載入失敗';
   byId('action-label').textContent = '重新載入';
   actionButton.disabled = false;

@@ -281,7 +281,7 @@ export class Game {
     this.width = width;
     this.height = height;
     this.paddleX = this.clampPaddleX(this.paddleX * widthRatio);
-    if (this.phase === 'ready' || this.phase === 'serve' || this.pausedFrom === 'serve') this.stageBall();
+    if (this.phase === 'ready' || this.phase === 'serve') this.stageBall();
     return true;
   }
 
@@ -293,7 +293,6 @@ export class Game {
     this.score = 0;
     this.timeLeft = ROUND_SECONDS;
     this.timeBonus = 0;
-    this.pausedFrom = undefined;
     this.loadLevel('ready');
   }
 
@@ -360,10 +359,6 @@ export class Game {
 
   action() {
     if (this.phase === 'playing') return;
-    if (this.phase === 'paused') {
-      this.togglePause();
-      return;
-    }
     if (this.phase === 'lost' || this.phase === 'time-up' || this.phase === 'won') this.reset(this.startLevel);
     if (this.phase === 'level-clear') {
       this.level += 1;
@@ -377,16 +372,6 @@ export class Game {
     ball.vy = -Math.sqrt(speed ** 2 - ball.vx ** 2);
     this.phase = 'playing';
     this.onEvent('launch');
-  }
-
-  togglePause() {
-    if (this.phase === 'paused') {
-      this.phase = this.pausedFrom;
-      this.pausedFrom = undefined;
-    } else if (this.countdownRunning) {
-      this.pausedFrom = this.phase;
-      this.phase = 'paused';
-    }
   }
 
   advanceClock(seconds) {
