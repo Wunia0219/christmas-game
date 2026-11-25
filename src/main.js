@@ -577,7 +577,7 @@ async function init() {
       pointerX = undefined;
       keys.add(event.code);
     }
-    if (event.code === 'Space' && !event.target.closest('button')) {
+    if (event.code === 'Space' && (event.target === fullscreenTrigger || !event.target.closest('button'))) {
       event.preventDefault();
       if (!event.repeat && game.phase !== 'playing') primaryAction();
     }
@@ -680,6 +680,7 @@ async function init() {
     });
     document.addEventListener('fullscreenchange', () => {
       fullscreenTrigger.setAttribute('aria-pressed', String(Boolean(document.fullscreenElement)));
+      if (document.activeElement === fullscreenTrigger) field.focus({ preventScroll: true });
     });
   }
 

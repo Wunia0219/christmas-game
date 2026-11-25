@@ -6,11 +6,14 @@ import { BRICK_TEXTURES, SPRITE_TEXTURES } from '../src/game.js';
 const root = new URL('../', import.meta.url);
 const files = new Map([
   ['index.html', 'index.html'],
+  ['game.html', 'game.html'],
+  ['src/lobby.css', 'src/lobby.css'],
   ['src/style.css', 'src/style.css'],
   ['src/main.js', 'src/main.js'],
   ['src/game.js', 'src/game.js'],
   ['src/art.js', 'src/art.js'],
   ['assets/christmas-forest.webp', 'assets/christmas-forest.webp'],
+  ['assets/lobby-snow.webp', 'assets/lobby-snow.webp'],
   ['assets/organizations/dongshi-giraffe.webp', 'assets/organizations/dongshi-giraffe.webp'],
   ['assets/organizations/sfang.webp', 'assets/organizations/sfang.webp'],
   ['assets/organizations/wuja.webp', 'assets/organizations/wuja.webp'],

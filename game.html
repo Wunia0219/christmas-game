@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ecdec7" />
+    <meta name="description" content="東勢長頸鹿美語的打磚塊遊戲。選一關，用球拍接住彈球，打碎磚陣。" />
+    <title>Giraffe 打磚塊 | 東勢長頸鹿美語</title>
+    <link rel="stylesheet" href="./src/style.css" />
+    <script type="importmap">
+      { "imports": { "pixi.js": "./vendor/pixi.mjs" } }
+    </script>
+  </head>
+  <body>
+    <main class="game-shell">
+      <section class="game-frame" aria-label="打磚塊遊戲">
+        <header class="topbar">
+          <div class="organizations" role="group" aria-label="機構">
+            <div class="organization">
+              <img class="organization-logo" src="./assets/organizations/sfang.webp" alt="" width="40" height="40" />
+              <span>十方啟能中心</span>
+            </div>
+            <div class="organization">
+              <img class="organization-logo" src="./assets/organizations/wuja.webp" alt="" width="40" height="40" />
+              <span>五甲教養院</span>
+            </div>
+          </div>
+          <div class="time-number">
+            <output class="sr-only" id="time-left" role="timer" aria-label="剩餘時間"><span id="time-value">2:00</span></output>
+            <button class="timer-trigger" id="fullscreen-trigger" type="button" disabled
+              aria-label="切換全螢幕" aria-description="快速點兩下倒數數字，或按 Enter。" aria-pressed="false">
+              <canvas id="time-pixels" width="26" height="7" aria-hidden="true"></canvas>
+            </button>
+          </div>
+        </header>
+
+        <div class="field-stage">
+          <div id="field" class="field" tabindex="0" aria-label="遊戲畫面" aria-describedby="controls">
+            <div class="arcade-hud" role="group" aria-label="本局資訊">
+              <output class="score-number" id="score" aria-live="off" aria-label="本局分數">
+                <span class="sr-only" id="score-value">00000</span>
+                <canvas id="score-pixels" width="33" height="7" aria-hidden="true"></canvas>
+              </output>
+              <div class="hearts" id="lives" role="img" aria-label="剩下 3 條命">
+                <i class="heart" aria-hidden="true"></i><i class="heart" aria-hidden="true"></i><i class="heart" aria-hidden="true"></i>
+              </div>
+            </div>
+            <div class="score-popups" id="score-popups" aria-hidden="true"></div>
+            <div class="canvas-layer" id="canvas-layer" aria-hidden="true"></div>
+            <div class="life-loss-flash" id="life-loss-flash" aria-hidden="true" hidden></div>
+            <div class="overlay" id="overlay">
+              <div class="overlay-content">
+                <h2 id="message">Xmas</h2>
+                <p id="detail" hidden></p>
+                <p id="level-bonus" class="bonus-score" hidden></p>
+                <p id="time-bonus" class="bonus-score" hidden></p>
+                <button class="button primary-button" id="action" type="button" disabled>
+                  <i class="play-icon" aria-hidden="true"></i><span id="action-label">載入中</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="game-deck">
+          <label class="level-picker" id="level-picker" hidden>
+            <span class="stat-label">選擇關卡</span><select id="level-select"></select>
+          </label>
+          <div class="level-readout" id="level-readout">
+            <span class="stat-label">關卡</span><span class="figures"><strong id="level">01</strong><span id="level-total"> / 03</span></span>
+          </div>
+          <div class="organization deck-brand">
+            <img class="organization-logo" src="./assets/organizations/dongshi-giraffe.webp" alt="" width="40" height="40" />
+            <span>東勢長頸鹿美語</span>
+          </div>
+        </footer>
+      </section>
+
+      <p class="sr-only" id="controls">用方向鍵或滑鼠移動球拍，空白鍵發球。觸控時左右拖曳移動，輕點發球。</p>
+      <p class="sr-only" id="announcement" role="status"></p>
+
+    </main>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
