@@ -3,8 +3,36 @@ import { drawScore } from './score-art.js';
 const phone = document.getElementById('player-phone');
 const phoneDialog = document.getElementById('phone-dialog');
 const phonePreview = document.getElementById('phone-preview');
+const phoneHint = document.getElementById('phone-hint');
 const phoneViewport = window.visualViewport;
-let savedPhone = '';
+const defaultPhoneHint = phoneHint.textContent;
+const phoneDigits = (value) => value.normalize('NFKC').replace(/\D/g, '');
+const formatPhoneDigits = (digits) => [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5, 8)].filter(Boolean).join('-');
+let confirmedPhone = '';
+let onPhoneConfirmed;
+
+export function hasPlayerPhone() {
+  return Boolean(confirmedPhone);
+}
+
+function renderPhonePreview() {
+  phonePreview.textContent = confirmedPhone ? formatPhoneDigits(confirmedPhone.slice(2)) : phone.placeholder;
+  phonePreview.classList.toggle('phone-placeholder', !confirmedPhone);
+}
+
+function clearPhoneDraft() {
+  onPhoneConfirmed = undefined;
+  phone.value = '';
+  phone.required = false;
+  phoneHint.textContent = defaultPhoneHint;
+}
+
+export function clearPlayerPhone() {
+  confirmedPhone = '';
+  clearPhoneDraft();
+  renderPhonePreview();
+  if (phoneDialog.open) phoneDialog.close();
+}
 
 function placePhoneDialog() {
   if (!phoneDialog.open || !phoneViewport) return;
@@ -12,28 +40,47 @@ function placePhoneDialog() {
   phoneDialog.style.setProperty('--phone-view-height', `${phoneViewport.height}px`);
 }
 
-document.getElementById('edit-phone').addEventListener('click', () => {
-  phone.value = savedPhone;
+export function openPhoneDialog(onConfirmed) {
+  if (phoneDialog.open) return;
+  onPhoneConfirmed = onConfirmed;
+  phone.value = formatPhoneDigits(confirmedPhone.slice(2));
+  phone.required = Boolean(onConfirmed);
+  phoneHint.textContent = onConfirmed ? '請先填寫手機號碼，再開始遊戲。' : defaultPhoneHint;
   phoneDialog.showModal();
   placePhoneDialog();
   // Keep focus in the tap handler so mobile browsers can open the keyboard.
   phone.focus({ preventScroll: true });
-});
+}
+
+document.getElementById('edit-phone').addEventListener('click', () => openPhoneDialog());
 phoneViewport?.addEventListener('resize', placePhoneDialog);
 phoneViewport?.addEventListener('scroll', placePhoneDialog);
-document.getElementById('cancel-phone').addEventListener('click', () => phoneDialog.close());
-phone.form.addEventListener('submit', () => {
-  savedPhone = phone.value;
-  phonePreview.textContent = savedPhone || phone.placeholder;
-  phonePreview.classList.toggle('phone-placeholder', !savedPhone);
+window.addEventListener('pagehide', clearPlayerPhone);
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) clearPlayerPhone();
 });
+document.getElementById('cancel-phone').addEventListener('click', () => phoneDialog.close());
+phoneDialog.addEventListener('close', () => {
+  if (!phoneDialog.open) clearPhoneDraft();
+});
+phone.form.addEventListener('submit', (event) => {
+  const suffix = phoneDigits(phone.value);
+  confirmedPhone = suffix.length === 8 ? `09${suffix}` : '';
+  renderPhonePreview();
 
-const phoneDigits = (value) => value.normalize('NFKC').replace(/\D/g, '');
+  if (onPhoneConfirmed && confirmedPhone) {
+    event.preventDefault();
+    const startGame = onPhoneConfirmed;
+    onPhoneConfirmed = undefined;
+    phoneDialog.close();
+    startGame();
+  }
+});
 
 function formatPhoneSuffix() {
   const { value, selectionStart } = phone;
   const digits = phoneDigits(value).slice(0, 8);
-  const formatted = [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5)].filter(Boolean).join('-');
+  const formatted = formatPhoneDigits(digits);
   if (value === formatted) return;
 
   const digitsBeforeCaret = Math.min(phoneDigits(value.slice(0, selectionStart)).length, digits.length);

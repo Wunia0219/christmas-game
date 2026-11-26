@@ -1,4 +1,5 @@
 import { bindFullscreen } from './fullscreen.js';
+import { clearPlayerPhone, hasPlayerPhone, openPhoneDialog } from './lobby.js';
 import { setBackgroundMusic } from './music.js';
 
 const root = document.documentElement;
@@ -45,13 +46,16 @@ function loadGame() {
     });
 }
 
-function showCurrentView() {
+function showCurrentView({ startingGame = false } = {}) {
+  if (location.pathname === gamePath && !showingGame && !startingGame) {
+    history.replaceState(null, '', returnToLobby.href);
+  }
   const inGame = location.pathname === gamePath;
   if (inGame === showingGame) return;
   const switching = showingGame !== undefined;
   showingGame = inGame;
 
-  if (inGame) lobby.querySelector('#phone-dialog[open]')?.close();
+  if (switching) clearPlayerPhone();
   lobby.hidden = inGame;
   gameView.hidden = !inGame;
   root.classList.toggle('lobby-page', !inGame);
@@ -71,19 +75,31 @@ function showCurrentView() {
   }
 }
 
+function startGame() {
+  if (!hasPlayerPhone()) {
+    openPhoneDialog(startGame);
+    return;
+  }
+  // Keep the same fullscreen element alive when changing routes.
+  history.pushState({ enteredGameFromLobby: true }, '', enterGame.href);
+  showCurrentView({ startingGame: true });
+}
+
 function navigate(event) {
   if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
-  const openingGame = event.currentTarget === enterGame;
-  if (!openingGame && history.state?.enteredGameFromLobby) {
+  if (event.currentTarget === enterGame) {
+    startGame();
+    return;
+  }
+  if (history.state?.enteredGameFromLobby) {
     if (!returningToLobby) {
       returningToLobby = true;
       history.back();
     }
     return;
   }
-  // Keep the same fullscreen element alive when changing routes.
-  history.pushState({ enteredGameFromLobby: openingGame }, '', event.currentTarget.href);
+  history.pushState(null, '', returnToLobby.href);
   showCurrentView();
 }
 
