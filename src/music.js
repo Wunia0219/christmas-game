@@ -1,16 +1,18 @@
 const music = document.getElementById('background-music');
-const startMusic = document.getElementById('start-music');
-music.volume = Number(music.dataset.volume);
+
+export function setBackgroundMusic(source, volume) {
+  music.pause();
+  music.volume = volume;
+  music.src = source;
+  void playMusic();
+}
 
 async function playMusic() {
-  if (document.hidden || !music.paused) return;
+  if (document.hidden || !music.paused || !music.hasAttribute('src')) return;
   try {
     await music.play();
-    if (startMusic) startMusic.hidden = true;
   } catch (error) {
-    if (error.name === 'NotAllowedError') {
-      if (startMusic && music.paused && !document.hidden) startMusic.hidden = false;
-    } else if (error.name !== 'AbortError') {
+    if (error.name !== 'NotAllowedError' && error.name !== 'AbortError') {
       console.warn('Could not play background music.', error);
     }
   }
@@ -23,6 +25,6 @@ document.addEventListener('visibilitychange', () => {
   else playMusic();
 });
 
-for (const event of ['pointerup', 'keydown', 'click']) {
+for (const event of ['pointerdown', 'pointerup', 'keydown', 'click']) {
   document.addEventListener(event, playMusic, { capture: true });
 }

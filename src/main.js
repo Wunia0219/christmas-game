@@ -4,6 +4,7 @@ import { assist, bonusBallColor, brickColor, drawBall, drawBrick, drawDrop, draw
 import { drawScore } from './score-art.js';
 
 const byId = (id) => document.getElementById(id);
+const gameView = byId('game-view');
 const field = byId('field');
 const frame = field.closest('.game-frame');
 const overlay = byId('overlay');
@@ -33,8 +34,6 @@ const ballFlashDuration = 0.26;
 const paddleImpactDuration = 0.18;
 const paddleImpactAnchor = 13;
 const multiballScoreLift = 34;
-const fullscreenTapWindowMs = 400;
-const fullscreenTapSlop = 10;
 const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護', cannons: '雙側砲台' };
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const number = (value, digits) => String(value).padStart(digits, '0');
@@ -175,13 +174,14 @@ function burstShield(sparks, brick) {
   }
 }
 
-async function init() {
+export async function initGame() {
   const app = new Application();
   await app.init({
     width: WIDTH,
     height: HEIGHT,
     backgroundAlpha: 0,
     antialias: false,
+    autoStart: false,
     resolution: Math.min(devicePixelRatio, 2),
     preference: ['webgl', 'canvas'],
   });
@@ -572,13 +572,13 @@ async function init() {
   });
 
   window.addEventListener('keydown', (event) => {
-    if (event.ctrlKey || event.metaKey || event.altKey || event.target === levelSelect) return;
+    if (gameView.hidden || event.ctrlKey || event.metaKey || event.altKey || event.target === levelSelect) return;
     if (leftKeys.includes(event.code) || rightKeys.includes(event.code)) {
       event.preventDefault();
       pointerX = undefined;
       keys.add(event.code);
     }
-    if (event.code === 'Space' && (event.target === fullscreenTrigger || !event.target.closest('button'))) {
+    if (event.code === 'Space' && (event.target === fullscreenTrigger || !event.target.closest?.('button, a'))) {
       event.preventDefault();
       if (!event.repeat && game.phase !== 'playing') primaryAction();
     }
@@ -632,59 +632,6 @@ async function init() {
     game.reset(Number(levelSelect.value));
     syncHud();
   });
-  if (document.fullscreenEnabled) {
-    fullscreenTrigger.disabled = false;
-    let fullscreenPress;
-    let lastFullscreenTap = -Infinity;
-
-    async function toggleFullscreen() {
-      lastFullscreenTap = -Infinity;
-      try {
-        if (document.fullscreenElement) await document.exitFullscreen();
-        else await document.documentElement.requestFullscreen();
-      } catch {
-        announcement.textContent = '目前無法切換全螢幕。';
-      }
-    }
-
-    const movedDuringPress = (event) => Math.hypot(event.clientX - fullscreenPress.x, event.clientY - fullscreenPress.y) > fullscreenTapSlop;
-    function cancelFullscreenPress(event) {
-      if (fullscreenPress?.id !== event.pointerId) return;
-      fullscreenPress = undefined;
-      lastFullscreenTap = -Infinity;
-    }
-    fullscreenTrigger.addEventListener('pointerdown', (event) => {
-      if (!event.isPrimary || event.button !== 0) return;
-      fullscreenPress = { id: event.pointerId, x: event.clientX, y: event.clientY, startedAt: event.timeStamp };
-      fullscreenTrigger.setPointerCapture(event.pointerId);
-    });
-    fullscreenTrigger.addEventListener('pointermove', (event) => {
-      if (fullscreenPress?.id === event.pointerId && movedDuringPress(event)) cancelFullscreenPress(event);
-    });
-    fullscreenTrigger.addEventListener('pointerup', (event) => {
-      if (fullscreenPress?.id !== event.pointerId) return;
-      if (event.timeStamp - fullscreenPress.startedAt > fullscreenTapWindowMs || movedDuringPress(event)) {
-        cancelFullscreenPress(event);
-        return;
-      }
-      fullscreenPress = undefined;
-      // Release supplies the activation needed by touch browsers.
-      if (event.timeStamp - lastFullscreenTap <= fullscreenTapWindowMs) void toggleFullscreen();
-      else lastFullscreenTap = event.timeStamp;
-    });
-    fullscreenTrigger.addEventListener('pointercancel', cancelFullscreenPress);
-    fullscreenTrigger.addEventListener('lostpointercapture', cancelFullscreenPress);
-    fullscreenTrigger.addEventListener('contextmenu', (event) => event.preventDefault());
-    fullscreenTrigger.addEventListener('click', (event) => {
-      // Native keyboard and assistive-technology activation uses a click without a pointer.
-      if (event.detail === 0 && !event.pointerType) void toggleFullscreen();
-    });
-    document.addEventListener('fullscreenchange', () => {
-      fullscreenTrigger.setAttribute('aria-pressed', String(Boolean(document.fullscreenElement)));
-      if (document.activeElement === fullscreenTrigger) field.focus({ preventScroll: true });
-    });
-  }
-
   byId('level-total').textContent = ` / ${number(LEVELS, 2)}`;
   levelSelect.replaceChildren(...LEVEL_NAMES.map((name, index) => new Option(`${number(index + 1, 2)} · ${name}`, index + 1)));
   actionButton.disabled = false;
@@ -713,13 +660,19 @@ async function init() {
     renderBrickEffects(0);
     app.render();
   }).observe(field);
-}
 
-init().catch((error) => {
-  console.error(error);
-  announcement.textContent = '遊戲載入失敗';
-  byId('message').textContent = '遊戲載入失敗';
-  byId('action-label').textContent = '重新載入';
-  actionButton.disabled = false;
-  actionButton.addEventListener('click', () => location.reload());
-});
+  return {
+    setActive(active) {
+      clearMovement();
+      if (!active) {
+        app.stop();
+        return;
+      }
+      game.reset();
+      clockStartedAt = -Infinity;
+      scoringBlast = false;
+      syncHud();
+      app.start();
+    },
+  };
+}

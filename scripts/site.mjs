@@ -6,12 +6,14 @@ import { BRICK_TEXTURES, SPRITE_TEXTURES } from '../src/game.js';
 const root = new URL('../', import.meta.url);
 const files = new Map([
   ['index.html', 'index.html'],
-  ['game.html', 'game.html'],
+  ['game.html', 'index.html'],
   ['src/lobby.css', 'src/lobby.css'],
   ['src/lobby-snow.js', 'src/lobby-snow.js'],
-  ['src/lobby-score.js', 'src/lobby-score.js'],
+  ['src/lobby.js', 'src/lobby.js'],
+  ['src/app.js', 'src/app.js'],
   ['src/style.css', 'src/style.css'],
   ['src/main.js', 'src/main.js'],
+  ['src/fullscreen.js', 'src/fullscreen.js'],
   ['src/music.js', 'src/music.js'],
   ['src/game.js', 'src/game.js'],
   ['src/art.js', 'src/art.js'],

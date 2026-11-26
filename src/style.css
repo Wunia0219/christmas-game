@@ -71,7 +71,7 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .topbar {
   --timer-width: 156px;
   display: grid;
-  grid-template-areas: 'organizations clock .';
+  grid-template-areas: 'organizations clock lobby';
   grid-template-columns: minmax(0, 1fr) var(--timer-width) minmax(0, 1fr);
   align-items: center;
   min-height: var(--brand-rail);
@@ -114,6 +114,20 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   -webkit-touch-callout: none;
 }
 .timer-trigger:enabled { cursor: pointer; }
+.game-lobby-link {
+  grid-area: lobby;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 8px;
+  color: var(--frame-ink);
+  font-size: .875rem;
+  font-weight: 800;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.game-lobby-link:hover { text-decoration: underline; text-underline-offset: 4px; }
 .time-number canvas, .score-number canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
 .stat-label { color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .06em; white-space: nowrap; }
 .figures { font: 700 .9rem/1 var(--mono); white-space: nowrap; }
@@ -145,7 +159,7 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   box-shadow: inset 0 2px #fffbf18c, 0 2px 0 #b69078;
 }
 .level-picker select:hover { background: var(--frame-light); border-color: var(--frame-muted); }
-.timer-trigger:focus-visible, .level-picker select:focus-visible { outline-color: var(--frame-accent); }
+.timer-trigger:focus-visible, .game-lobby-link:focus-visible, .level-picker select:focus-visible { outline-color: var(--frame-accent); }
 
 .field-stage {
   position: relative;
@@ -317,8 +331,7 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 
 @container (max-width: 780px) {
   .topbar {
-    grid-template-areas: 'organizations' 'clock';
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'organizations organizations organizations' '. clock lobby';
     gap: 8px;
   }
   .organizations { border-bottom: 1px solid #97705d55; }

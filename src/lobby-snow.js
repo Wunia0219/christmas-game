@@ -15,6 +15,7 @@ if (context) {
 }
 
 function createSnowfall(sheet) {
+  const lobby = document.getElementById('lobby-view');
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const flakes = [];
   let width = 0;
@@ -59,7 +60,7 @@ function createSnowfall(sheet) {
   }
 
   function syncAnimation() {
-    if (document.hidden || reducedMotion.matches || width === 0 || height === 0) {
+    if (lobby.hidden || document.hidden || reducedMotion.matches || width === 0 || height === 0) {
       if (frame !== undefined) cancelAnimationFrame(frame);
       frame = undefined;
       previousTime = undefined;
@@ -70,7 +71,10 @@ function createSnowfall(sheet) {
 
   new ResizeObserver(([{ contentRect }]) => {
     const { width: nextWidth, height: nextHeight } = contentRect;
-    if (!nextWidth || !nextHeight) return;
+    if (!nextWidth || !nextHeight) {
+      syncAnimation();
+      return;
+    }
     for (const flake of flakes) {
       flake.x *= nextWidth / width;
       flake.y *= nextHeight / height;
