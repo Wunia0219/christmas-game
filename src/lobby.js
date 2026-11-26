@@ -1,5 +1,76 @@
 import { drawScore } from './score-art.js';
 
+const phone = document.getElementById('player-phone');
+const phoneDialog = document.getElementById('phone-dialog');
+const phonePreview = document.getElementById('phone-preview');
+const phoneViewport = window.visualViewport;
+let savedPhone = '';
+
+function placePhoneDialog() {
+  if (!phoneDialog.open || !phoneViewport) return;
+  phoneDialog.style.setProperty('--phone-view-top', `${phoneViewport.offsetTop}px`);
+  phoneDialog.style.setProperty('--phone-view-height', `${phoneViewport.height}px`);
+}
+
+document.getElementById('edit-phone').addEventListener('click', () => {
+  phone.value = savedPhone;
+  phoneDialog.showModal();
+  placePhoneDialog();
+  // Keep focus in the tap handler so mobile browsers can open the keyboard.
+  phone.focus({ preventScroll: true });
+});
+phoneViewport?.addEventListener('resize', placePhoneDialog);
+phoneViewport?.addEventListener('scroll', placePhoneDialog);
+document.getElementById('cancel-phone').addEventListener('click', () => phoneDialog.close());
+phone.form.addEventListener('submit', () => {
+  savedPhone = phone.value;
+  phonePreview.textContent = savedPhone || phone.placeholder;
+  phonePreview.classList.toggle('phone-placeholder', !savedPhone);
+});
+
+const phoneDigits = (value) => value.normalize('NFKC').replace(/\D/g, '');
+
+function formatPhoneSuffix() {
+  const { value, selectionStart } = phone;
+  const digits = phoneDigits(value).slice(0, 8);
+  const formatted = [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5)].filter(Boolean).join('-');
+  if (value === formatted) return;
+
+  const digitsBeforeCaret = Math.min(phoneDigits(value.slice(0, selectionStart)).length, digits.length);
+  const caret = digitsBeforeCaret + Number(digitsBeforeCaret > 2) + Number(digitsBeforeCaret > 5);
+  phone.value = formatted;
+  phone.setSelectionRange(caret, caret);
+}
+
+phone.addEventListener('input', (event) => {
+  if (!event.isComposing) formatPhoneSuffix();
+});
+phone.addEventListener('compositionend', formatPhoneSuffix);
+
+phone.addEventListener('beforeinput', (event) => {
+  const { value, selectionStart, selectionEnd } = phone;
+  if (!event.cancelable || event.isComposing || selectionStart !== selectionEnd) return;
+
+  // Treat generated dashes as part of the adjacent digit when deleting.
+  if (event.inputType === 'deleteContentBackward' && value[selectionStart - 1] === '-') {
+    phone.setSelectionRange(selectionStart - 2, selectionStart);
+  } else if (event.inputType === 'deleteContentForward' && value[selectionStart] === '-') {
+    phone.setSelectionRange(selectionStart, selectionStart + 2);
+  }
+});
+
+phone.addEventListener('paste', (event) => {
+  if (!event.clipboardData) return;
+  event.preventDefault();
+  const digits = phoneDigits(event.clipboardData.getData('text/plain'));
+  if (/^09\d{8}$/.test(digits)) {
+    phone.setRangeText(digits.slice(2), 0, phone.value.length, 'end');
+  } else if (digits) {
+    phone.setRangeText(digits, phone.selectionStart, phone.selectionEnd, 'end');
+  }
+  formatPhoneSuffix();
+});
+
 const value = document.getElementById('leader-score-value');
 const canvas = document.getElementById('leader-score-pixels');
 

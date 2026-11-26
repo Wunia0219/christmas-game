@@ -21,6 +21,19 @@
       <main class="lobby-main">
         <section class="lobby-welcome" aria-labelledby="lobby-title">
           <div class="lobby-heading">
+            <div class="lobby-community">
+              <p class="lobby-community-note">聖誕同樂，一起為公益加油</p>
+              <ul class="lobby-partners" aria-label="公益夥伴">
+                <li class="lobby-partner-sfang">
+                  <img src="./assets/organizations/sfang.webp" alt="" width="48" height="48" />
+                  <span>十方啟能中心</span>
+                </li>
+                <li>
+                  <img src="./assets/organizations/wuja.webp" alt="" width="48" height="48" />
+                  <span>五甲教養院</span>
+                </li>
+              </ul>
+            </div>
             <div class="lobby-brand">
               <button class="lobby-brand-logo" id="lobby-fullscreen" type="button" disabled
                 aria-label="切換全螢幕" aria-description="快速點兩下標誌，或按 Enter。" aria-pressed="false">
@@ -33,9 +46,11 @@
           </div>
 
           <div class="lobby-entry">
-            <label for="player-phone">手機號碼</label>
-            <input id="player-phone" type="tel" inputmode="numeric" autocomplete="off" maxlength="10"
-              placeholder="09XXXXXXXX" />
+            <p class="lobby-entry-label" id="phone-label">手機號碼</p>
+            <button class="lobby-phone-trigger" id="edit-phone" type="button"
+              aria-labelledby="phone-label" aria-haspopup="dialog" aria-controls="phone-dialog">
+              <span aria-hidden="true"><span class="lobby-phone-prefix">09</span><span class="phone-placeholder" id="phone-preview">XX-XXX-XXX</span></span>
+            </button>
             <a class="lobby-start" id="enter-game" href="./game.html"><i class="play-icon" aria-hidden="true"></i>開始遊戲</a>
           </div>
         </section>
@@ -74,6 +89,23 @@
           </div>
         </section>
       </main>
+      <dialog class="lobby-phone-dialog" id="phone-dialog" aria-labelledby="phone-dialog-title">
+        <form method="dialog" class="lobby-phone-form">
+          <h2 id="phone-dialog-title"><label for="player-phone">輸入手機號碼</label></h2>
+          <p id="phone-hint">請確認手機號碼是否填寫正確。</p>
+          <span class="sr-only" id="phone-prefix-hint">開頭的 09 已填好。</span>
+          <div class="lobby-phone">
+            <span class="lobby-phone-prefix" aria-hidden="true">09</span>
+            <input id="player-phone" type="tel" inputmode="numeric" enterkeyhint="done" autocomplete="off"
+              maxlength="10" pattern="[0-9]{2}-[0-9]{3}-[0-9]{3}" placeholder="XX-XXX-XXX"
+              aria-describedby="phone-prefix-hint phone-hint" autofocus />
+          </div>
+          <div class="lobby-phone-actions">
+            <button type="button" id="cancel-phone">取消</button>
+            <button type="submit" class="lobby-phone-done">完成</button>
+          </div>
+        </form>
+      </dialog>
     </div>
     <main class="game-shell" id="game-view" hidden>
       <section class="game-frame" aria-label="打磚塊遊戲">
@@ -95,7 +127,6 @@
               <canvas id="time-pixels" width="26" height="7" aria-hidden="true"></canvas>
             </button>
           </div>
-          <a class="game-lobby-link" id="return-to-lobby" href="./">回大廳</a>
         </header>
 
         <div class="field-stage">
@@ -127,16 +158,13 @@
         </div>
 
         <footer class="game-deck">
-          <label class="level-picker" id="level-picker" hidden>
-            <span class="stat-label">選擇關卡</span><select id="level-select"></select>
-          </label>
-          <div class="level-readout" id="level-readout">
+          <div class="level-readout" id="level-readout" hidden>
             <span class="stat-label">關卡</span><span class="figures"><strong id="level">01</strong><span id="level-total"> / 03</span></span>
           </div>
-          <div class="organization deck-brand">
+          <a class="organization deck-brand" id="return-to-lobby" href="./" aria-label="東勢長頸鹿美語，回大廳">
             <img class="organization-logo" src="./assets/organizations/dongshi-giraffe.webp" alt="" width="40" height="40" />
             <span>東勢長頸鹿美語</span>
-          </div>
+          </a>
         </footer>
       </section>
 

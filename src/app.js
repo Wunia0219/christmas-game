@@ -51,6 +51,7 @@ function showCurrentView() {
   const switching = showingGame !== undefined;
   showingGame = inGame;
 
+  if (inGame) lobby.querySelector('#phone-dialog[open]')?.close();
   lobby.hidden = inGame;
   gameView.hidden = !inGame;
   root.classList.toggle('lobby-page', !inGame);

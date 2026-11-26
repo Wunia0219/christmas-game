@@ -32,9 +32,6 @@
   --gold: #ffdb79;
   --frame-ink: #442e39;
   --frame-muted: #715044;
-  --frame-edge: #97705d;
-  --frame-paper: #f4e2cb;
-  --frame-light: #fff4e2;
   --frame-accent: #713d4b;
   --mono: 'Space Mono', monospace;
 }
@@ -71,7 +68,7 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .topbar {
   --timer-width: 156px;
   display: grid;
-  grid-template-areas: 'organizations clock lobby';
+  grid-template-areas: 'organizations clock .';
   grid-template-columns: minmax(0, 1fr) var(--timer-width) minmax(0, 1fr);
   align-items: center;
   min-height: var(--brand-rail);
@@ -114,25 +111,11 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   -webkit-touch-callout: none;
 }
 .timer-trigger:enabled { cursor: pointer; }
-.game-lobby-link {
-  grid-area: lobby;
-  justify-self: end;
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding-inline: 8px;
-  color: var(--frame-ink);
-  font-size: .875rem;
-  font-weight: 800;
-  white-space: nowrap;
-  text-decoration: none;
-}
-.game-lobby-link:hover { text-decoration: underline; text-underline-offset: 4px; }
 .time-number canvas, .score-number canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
 .stat-label { color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .06em; white-space: nowrap; }
 .figures { font: 700 .9rem/1 var(--mono); white-space: nowrap; }
 
-.button, .level-picker select {
+.button {
   min-height: 44px;
   padding: 0 10px;
   border: 1px solid var(--line);
@@ -146,20 +129,12 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   cursor: pointer;
 }
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease; }
-.button:not(:disabled):hover, .level-picker select:hover { border-color: #7887a2; background: #293752; }
+.button:not(:disabled):hover { border-color: #7887a2; background: #293752; }
 .button:not(:disabled):active { transform: translateY(1px); }
 .button:disabled { opacity: .5; cursor: default; }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
-.level-picker select {
-  border-color: var(--frame-edge);
-  border-radius: 3px;
-  background: var(--frame-paper);
-  color: var(--frame-ink);
-  box-shadow: inset 0 2px #fffbf18c, 0 2px 0 #b69078;
-}
-.level-picker select:hover { background: var(--frame-light); border-color: var(--frame-muted); }
-.timer-trigger:focus-visible, .game-lobby-link:focus-visible, .level-picker select:focus-visible { outline-color: var(--frame-accent); }
+.timer-trigger:focus-visible, .deck-brand:focus-visible { outline-color: var(--frame-accent); }
 
 .field-stage {
   position: relative;
@@ -319,10 +294,9 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   min-width: 0;
   height: var(--brand-rail);
 }
-.deck-brand { grid-column: 2; justify-self: end; }
+.deck-brand { grid-column: 2; justify-self: end; min-height: 44px; text-decoration: none; }
 .deck-brand .organization-logo { clip-path: circle(45%); }
-.level-picker, .level-readout { display: flex; align-items: center; gap: 8px; min-height: 44px; }
-.level-picker select { min-width: 0; max-width: 100%; color-scheme: light; }
+.level-readout { display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .game-deck .stat-label, #level-total { color: var(--frame-muted); }
 .level-readout .figures { color: var(--frame-accent); }
 #level-total { font-size: .76rem; font-weight: 400; }
@@ -331,7 +305,8 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 
 @container (max-width: 780px) {
   .topbar {
-    grid-template-areas: 'organizations organizations organizations' '. clock lobby';
+    grid-template-areas: 'organizations' 'clock';
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
   .organizations { border-bottom: 1px solid #97705d55; }
@@ -340,7 +315,6 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 }
 @container (max-width: 390px) {
   .organizations { --brand-separation: 12px; }
-  .level-picker .stat-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 }
 @media (min-width: 1024px) and (max-height: 460px) {
   .game-shell { --side-gutter: 2vw; }

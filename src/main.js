@@ -9,8 +9,6 @@ const field = byId('field');
 const frame = field.closest('.game-frame');
 const overlay = byId('overlay');
 const actionButton = byId('action');
-const levelPicker = byId('level-picker');
-const levelSelect = byId('level-select');
 const levelReadout = byId('level-readout');
 const fullscreenTrigger = byId('fullscreen-trigger');
 const score = byId('score');
@@ -342,7 +340,6 @@ export async function initGame() {
       scorePopups.replaceChildren();
       displayedBricks = game.bricks;
       byId('level').textContent = number(game.level, 2);
-      levelSelect.value = String(game.startLevel);
       field.style.setProperty('--layout-bottom', `${game.layoutBottom / game.height * 100}%`);
       levelChanged = true;
     }
@@ -380,7 +377,6 @@ export async function initGame() {
     frame.dataset.phase = phase;
     announcement.textContent = phase === 'serve' ? `剩下 ${game.lives} 條命。${screen.title}。` : screen.status;
     overlay.hidden = phase === 'playing' || phase === 'life-loss';
-    levelPicker.hidden = phase !== 'ready';
     levelReadout.hidden = phase === 'ready';
     if (overlay.hidden) return;
     pointerX = undefined;
@@ -572,7 +568,7 @@ export async function initGame() {
   });
 
   window.addEventListener('keydown', (event) => {
-    if (gameView.hidden || event.ctrlKey || event.metaKey || event.altKey || event.target === levelSelect) return;
+    if (gameView.hidden || event.ctrlKey || event.metaKey || event.altKey) return;
     if (leftKeys.includes(event.code) || rightKeys.includes(event.code)) {
       event.preventDefault();
       pointerX = undefined;
@@ -626,14 +622,7 @@ export async function initGame() {
   field.addEventListener('lostpointercapture', () => { gesture = undefined; });
 
   actionButton.addEventListener('click', primaryAction);
-  levelSelect.addEventListener('change', () => {
-    if (game.phase !== 'ready') return;
-    clearMovement();
-    game.reset(Number(levelSelect.value));
-    syncHud();
-  });
   byId('level-total').textContent = ` / ${number(LEVELS, 2)}`;
-  levelSelect.replaceChildren(...LEVEL_NAMES.map((name, index) => new Option(`${number(index + 1, 2)} · ${name}`, index + 1)));
   actionButton.disabled = false;
   syncHud();
 
