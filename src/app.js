@@ -1,6 +1,7 @@
 import { bindFullscreen } from './fullscreen.js';
+import { openEntryIntro } from './intro.js';
 import { clearPlayerPhone, hasPlayerPhone, openPhoneDialog } from './lobby.js';
-import { setBackgroundMusic } from './music.js';
+import { fadeBackgroundMusic, prepareEntryChime, setBackgroundMusic } from './music.js';
 
 const root = document.documentElement;
 const theme = document.querySelector('meta[name="theme-color"]');
@@ -11,6 +12,8 @@ const enterGame = document.getElementById('enter-game');
 const returnToLobby = document.getElementById('return-to-lobby');
 const gameAnnouncement = document.getElementById('announcement');
 const gamePath = new URL(enterGame.href).pathname;
+const lobbyVolume = 0.28;
+const gameMusic = './assets/music/8-ringing_of_bells.mp3';
 
 bindFullscreen(document.getElementById('lobby-fullscreen'), {
   announcement: document.getElementById('lobby-announcement'),
@@ -24,6 +27,7 @@ let showingGame;
 let gameController;
 let gameLoading;
 let returningToLobby = false;
+let entry;
 
 // A reload starts a new document, even if the URL is a previous game entry.
 if (history.state?.enteredGameFromLobby) history.replaceState(null, '');
@@ -64,25 +68,49 @@ function showCurrentView({ startingGame = false } = {}) {
   window.scrollTo(0, 0);
 
   if (inGame) {
-    setBackgroundMusic('./assets/music/8-ringing_of_bells.mp3', 0.16);
-    if (gameController) gameController.setActive(true);
-    else loadGame();
-    field.focus({ preventScroll: true });
+    gameController?.setActive(true);
   } else {
     gameController?.setActive(false);
-    setBackgroundMusic('./assets/music/10-winter_tale.mp3', 0.28);
+    setBackgroundMusic('./assets/music/10-winter_tale.mp3', lobbyVolume);
     if (switching) enterGame.focus({ preventScroll: true });
   }
 }
 
-function startGame() {
+function closeEntryIntro() {
+  entry.close();
+  entry = undefined;
+  lobby.inert = false;
+  gameView.inert = false;
+}
+
+async function startGame() {
+  if (entry || showingGame) return;
   if (!hasPlayerPhone()) {
     openPhoneDialog(startGame);
     return;
   }
+
+  const preview = new URLSearchParams(location.search).get('intro') === 'preview';
+  const playChime = prepareEntryChime();
+  lobby.inert = true;
+  gameView.inert = true;
+  const current = openEntryIntro({ preview, onGiftOpen: playChime });
+  entry = current;
   // Keep the same fullscreen element alive when changing routes.
   history.pushState({ enteredGameFromLobby: true }, '', enterGame.href);
+  fadeBackgroundMusic(0.12);
+  loadGame();
+  await current.held;
+  if (entry !== current) return;
+
+  // Reveal the game's loading screen if assets are still arriving so Back stays available.
   showCurrentView({ startingGame: true });
+  await current.reveal();
+  if (entry !== current) return;
+
+  closeEntryIntro();
+  setBackgroundMusic(gameMusic, 0.16);
+  field.focus({ preventScroll: true });
 }
 
 function navigate(event) {
@@ -107,6 +135,14 @@ enterGame.addEventListener('click', navigate);
 returnToLobby.addEventListener('click', navigate);
 window.addEventListener('popstate', () => {
   returningToLobby = false;
+  if (entry) {
+    closeEntryIntro();
+    if (!showingGame) {
+      clearPlayerPhone();
+      fadeBackgroundMusic(lobbyVolume);
+      enterGame.focus({ preventScroll: true });
+    }
+  }
   showCurrentView();
 });
 showCurrentView();

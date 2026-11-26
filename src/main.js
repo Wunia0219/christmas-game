@@ -48,7 +48,7 @@ function expiryWarning(timeLeft) {
 }
 
 const screens = {
-  ready: { status: '準備就緒', button: '開始遊戲' },
+  ready: { status: '準備就緒', button: '發球' },
   playing: { status: '遊戲進行中' },
   'life-loss': { status: '漏接' },
   serve: { status: '等待發球', title: '再發一球', button: '發球' },
@@ -568,7 +568,7 @@ export async function initGame() {
   });
 
   window.addEventListener('keydown', (event) => {
-    if (gameView.hidden || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (gameView.hidden || gameView.inert || event.ctrlKey || event.metaKey || event.altKey) return;
     if (leftKeys.includes(event.code) || rightKeys.includes(event.code)) {
       event.preventDefault();
       pointerX = undefined;

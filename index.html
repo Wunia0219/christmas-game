@@ -8,6 +8,9 @@
     <title>聖誕打磚塊大廳 | 東勢長頸鹿美語</title>
     <link rel="stylesheet" href="./src/style.css" />
     <link rel="stylesheet" href="./src/lobby.css" />
+    <link rel="stylesheet" href="./src/intro.css" />
+    <link rel="preload" href="./assets/sprites/intro-gift-unwrapping.webp" as="image" fetchpriority="low" />
+    <link rel="preload" href="./assets/intro-winter.webp" as="image" fetchpriority="low" />
     <script type="importmap">
       { "imports": { "pixi.js": "./vendor/pixi.mjs" } }
     </script>
@@ -24,22 +27,26 @@
             <div class="lobby-community">
               <p class="lobby-community-note">聖誕同樂，一起為公益加油</p>
               <ul class="lobby-partners" aria-label="公益夥伴">
-                <li class="lobby-partner-sfang">
-                  <img src="./assets/organizations/sfang.webp" alt="" width="48" height="48" />
-                  <span>十方啟能中心</span>
+                <li>
+                  <img class="lobby-identity-logo" src="./assets/organizations/sfang.webp" alt="" width="128" height="88" />
+                  <span class="lobby-identity-name">十方啟能中心</span>
                 </li>
                 <li>
-                  <img src="./assets/organizations/wuja.webp" alt="" width="48" height="48" />
-                  <span>五甲教養院</span>
+                  <img class="lobby-identity-logo" src="./assets/organizations/wuja.webp" alt="" width="118" height="128" />
+                  <span class="lobby-identity-name">五甲教養院</span>
                 </li>
               </ul>
+            </div>
+            <div class="lobby-slogans">
+              <p>十元不嫌少，百元不嫌多</p>
+              <p>金額不設限 愛心不打折</p>
             </div>
             <div class="lobby-brand">
               <button class="lobby-brand-logo" id="lobby-fullscreen" type="button" disabled
                 aria-label="切換全螢幕" aria-description="快速點兩下標誌，或按 Enter。" aria-pressed="false">
-                <img src="./assets/organizations/dongshi-giraffe.webp" alt="" width="160" height="160" />
+                <img class="lobby-identity-logo" src="./assets/organizations/dongshi-giraffe.webp" alt="" width="160" height="160" />
               </button>
-              <p class="lobby-brand-name">東勢長頸鹿美語</p>
+              <p class="lobby-brand-name lobby-identity-name">東勢長頸鹿美語</p>
               <p class="sr-only" id="lobby-announcement" role="status"></p>
             </div>
             <h1 class="lobby-title" id="lobby-title">聖誕打磚塊</h1>
@@ -171,6 +178,30 @@
       <p class="sr-only" id="controls">用方向鍵或滑鼠移動球拍，空白鍵發球。觸控時左右拖曳移動，輕點發球。</p>
       <p class="sr-only" id="announcement" role="status"></p>
     </main>
+
+    <section class="entry-intro" id="entry-intro" aria-labelledby="intro-title" tabindex="-1" hidden>
+      <div class="intro-scene" id="intro-scene">
+        <div class="intro-snow" aria-hidden="true"></div>
+        <div class="intro-recipients" aria-live="polite">
+          <header class="intro-header" id="intro-header" hidden>
+            <h2 id="intro-title">這個聖誕，有你一起送暖。</h2>
+            <ul class="intro-organizations" aria-label="受贈團體">
+              <li><img src="./assets/organizations/sfang.webp" alt="" width="44" height="44" /><span>十方啟能中心</span></li>
+              <li><img src="./assets/organizations/wuja.webp" alt="" width="44" height="44" /><span>五甲教養院</span></li>
+            </ul>
+            <p class="intro-participation" id="intro-personal"><strong>+1</strong> 份心意</p>
+            <p class="intro-participation" id="intro-demo" hidden>試播人數 <strong>327 → 328</strong> 位玩家</p>
+          </header>
+        </div>
+        <div class="intro-act" aria-hidden="true">
+          <span class="intro-ground"></span>
+          <span class="intro-gift-light" id="intro-gift-light"></span>
+          <div class="intro-actor" id="intro-actor"></div>
+        </div>
+        <p class="intro-brand"><img src="./assets/organizations/dongshi-giraffe.webp" alt="" width="36" height="36" /><span>東勢長頸鹿美語</span></p>
+      </div>
+      <span class="intro-warm-wash" id="intro-warm-wash" aria-hidden="true"></span>
+    </section>
 
     <audio id="background-music" preload="auto" loop hidden></audio>
     <script type="module" src="./src/app.js"></script>
