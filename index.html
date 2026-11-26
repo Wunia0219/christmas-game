@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#24463c" />
+    <meta name="theme-color" content="#0d2235" />
     <meta name="description" content="東勢長頸鹿美語的聖誕打磚塊遊戲大廳。" />
     <title>聖誕打磚塊大廳 | 東勢長頸鹿美語</title>
     <link rel="stylesheet" href="./src/style.css" />
@@ -11,29 +11,26 @@
   </head>
   <body>
     <div class="lobby-backdrop" aria-hidden="true">
-      <div class="lobby-wallpaper"></div>
+      <canvas class="lobby-snow" id="lobby-snow"></canvas>
     </div>
 
     <main class="lobby-main">
       <section class="lobby-welcome" aria-labelledby="lobby-title">
-        <div class="lobby-emblem" aria-hidden="true">
-          <span class="emblem-brick emblem-brick--red"></span>
-          <span class="emblem-brick emblem-brick--gold"></span>
-          <span class="emblem-brick emblem-brick--plum"></span>
-          <span class="emblem-spark emblem-spark--left"></span>
-          <span class="emblem-spark emblem-spark--right"></span>
-          <img class="emblem-ball" src="./assets/sprites/main-ball.webp" alt="" width="15" height="15" />
+        <div class="lobby-heading">
+          <div class="lobby-brand">
+            <img class="lobby-brand-logo" src="./assets/organizations/dongshi-giraffe.webp" alt="" width="160" height="160" />
+            <p class="lobby-brand-name">東勢長頸鹿美語</p>
+          </div>
+          <h1 class="lobby-title" id="lobby-title">聖誕打磚塊</h1>
         </div>
-        <h1 class="lobby-title" id="lobby-title">
-          <span lang="en">GIRAFFE</span>
-          聖誕打磚塊
-        </h1>
 
         <div class="lobby-entry">
-          <label for="player-phone">手機號碼</label>
+          <div class="lobby-entry-heading">
+            <label for="player-phone">手機號碼</label>
+            <button class="lobby-music-start" id="start-music" type="button" hidden>播放配樂</button>
+          </div>
           <input id="player-phone" type="tel" inputmode="numeric" autocomplete="off" maxlength="10"
-            placeholder="09XXXXXXXX" aria-describedby="phone-hint" />
-          <p id="phone-hint">試填欄位，僅供介面預覽。</p>
+            placeholder="09XXXXXXXX" />
           <a class="lobby-start" href="./game.html"><i class="play-icon" aria-hidden="true"></i>開始遊戲</a>
         </div>
       </section>
@@ -43,12 +40,21 @@
           <h2 id="leaderboard-title"><span class="leaderboard-trophy" aria-hidden="true"></span>排行榜</h2>
           <p>示意資料</p>
         </header>
+        <div class="leaderboard-first">
+          <p class="leaderboard-first-label">榜首</p>
+          <p class="leaderboard-first-score"><span id="leader-score-value">18,450</span><canvas id="leader-score-pixels" aria-hidden="true" hidden></canvas></p>
+          <p class="leaderboard-first-player">雪夜長頸鹿</p>
+        </div>
         <table class="leaderboard-table" aria-label="排行榜示意">
+          <colgroup>
+            <col class="leaderboard-rank-column" />
+            <col />
+            <col class="leaderboard-score-column" />
+          </colgroup>
           <thead>
             <tr><th scope="col">名次</th><th scope="col">玩家</th><th scope="col">分數</th></tr>
           </thead>
           <tbody>
-            <tr><td><span class="leaderboard-rank">01</span></td><th scope="row">雪夜長頸鹿</th><td>18,450</td></tr>
             <tr><td><span class="leaderboard-rank">02</span></td><th scope="row">聖誕雪人</th><td>15,280</td></tr>
             <tr><td><span class="leaderboard-rank">03</span></td><th scope="row">星星麋鹿</th><td>12,760</td></tr>
             <tr><td><span class="leaderboard-rank">04</span></td><th scope="row">薑餅小隊</th><td>10,320</td></tr>
@@ -57,5 +63,9 @@
         </table>
       </section>
     </main>
+    <audio id="background-music" src="./assets/music/10-winter_tale.mp3" data-volume="0.28" preload="none" loop hidden></audio>
+    <script type="module" src="./src/music.js"></script>
+    <script type="module" src="./src/lobby-snow.js"></script>
+    <script type="module" src="./src/lobby-score.js"></script>
   </body>
 </html>

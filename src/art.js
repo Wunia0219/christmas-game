@@ -83,47 +83,6 @@ const snowCaps = {
   right: [[0.71, rightSnowMound, 1]],
 };
 
-const digits = [
-  ['.###.', '##.##', '##.##', '##.##', '##.##', '##.##', '.###.'],
-  ['..##.', '.###.', '..##.', '..##.', '..##.', '..##.', '.####'],
-  ['.###.', '##.##', '...##', '..##.', '.##..', '##...', '#####'],
-  ['####.', '...##', '...##', '.###.', '...##', '...##', '####.'],
-  ['##.##', '##.##', '##.##', '#####', '...##', '...##', '...##'],
-  ['#####', '##...', '##...', '####.', '...##', '##.##', '.###.'],
-  ['.###.', '##...', '##...', '####.', '##.##', '##.##', '.###.'],
-  ['#####', '...##', '...##', '..##.', '..##.', '.##..', '.##..'],
-  ['.###.', '##.##', '##.##', '.###.', '##.##', '##.##', '.###.'],
-  ['.###.', '##.##', '##.##', '.####', '...##', '...##', '.###.'],
-];
-const numberSymbols = {
-  '+': ['.....', '..#..', '..#..', '#####', '..#..', '..#..', '.....'],
-  ':': ['.....', '..##.', '..##.', '.....', '..##.', '..##.', '.....'],
-};
-
-export function drawScore(canvas, value, { color = '#ffcb70', outline } = {}) {
-  const digitWidth = digits[0][0].length;
-  const advance = digitWidth + 2;
-  const padding = outline ? 1 : 0;
-  canvas.width = advance * value.length - 2 + padding * 2;
-  canvas.height = digits[0].length + padding * 2;
-  const context = canvas.getContext('2d');
-  const pixels = [];
-  for (const [index, symbol] of [...value].entries()) {
-    const rows = numberSymbols[symbol] ?? digits[Number(symbol)];
-    for (const [row, line] of rows.entries()) {
-      for (const match of line.matchAll(/#+/g)) {
-        pixels.push([index * advance + match.index + padding, row + padding, match[0].length]);
-      }
-    }
-  }
-  if (outline) {
-    context.fillStyle = outline;
-    for (const [x, y, width] of pixels) context.fillRect(x - 1, y - 1, width + 2, 3);
-  }
-  context.fillStyle = color;
-  for (const [x, y, width] of pixels) context.fillRect(x, y, width, 1);
-}
-
 function glyph(graphic, rows, x, y, size, color) {
   const left = x - rows[0].length * size / 2;
   const top = y - rows.length * size / 2;

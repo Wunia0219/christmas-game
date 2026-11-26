@@ -1,6 +1,7 @@
 import { Application, Container, Graphics } from 'pixi.js';
 import { BALL_RADIUS, BARRIER, CANNON, Game, GUARD, HEIGHT, LEVEL_NAMES, LEVELS, PADDLE, TIME_BONUS_RATE, TNT, WIDTH } from './game.js';
-import { assist, bonusBallColor, brickColor, drawBall, drawBrick, drawDrop, drawGiftSparkles, drawHardCrack, drawPaddleImpact, drawRail, drawScore, drawShot, drawSpark, loadGameTextures, makeCannon, makePaddle } from './art.js';
+import { assist, bonusBallColor, brickColor, drawBall, drawBrick, drawDrop, drawGiftSparkles, drawHardCrack, drawPaddleImpact, drawRail, drawShot, drawSpark, loadGameTextures, makeCannon, makePaddle } from './art.js';
+import { drawScore } from './score-art.js';
 
 const byId = (id) => document.getElementById(id);
 const field = byId('field');
