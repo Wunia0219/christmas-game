@@ -1,5 +1,3 @@
-import { drawScore } from './score-art.js';
-
 const phone = document.getElementById('player-phone');
 const phoneDialog = document.getElementById('phone-dialog');
 const phonePreview = document.getElementById('phone-preview');
@@ -118,80 +116,57 @@ phone.addEventListener('paste', (event) => {
   formatPhoneSuffix();
 });
 
-const value = document.getElementById('leader-score-value');
-const canvas = document.getElementById('leader-score-pixels');
-
-if (drawScore(canvas, value.textContent, { color: '#ffdc96' })) {
-  value.classList.add('sr-only');
-  canvas.hidden = false;
-}
-
-const scrollRegion = document.getElementById('leaderboard-scroll');
+const scrollWindow = document.getElementById('leaderboard-scroll');
+const table = scrollWindow.firstElementChild;
+const rows = table.tBodies[0];
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const scrollSpeed = 0.017; // Pixels per millisecond.
-const dwellMs = 2500;
+const scrollSpeed = 22; // Pixels per second.
+const topPauseMs = 500;
+const bottomPauseMs = 2000;
 
-let frame;
-let previousTime;
-let previousTop = scrollRegion.scrollTop;
-let remainingDelay = dwellMs;
-let pixels = 0;
-
-function advanceLeaderboard(time) {
-  const elapsed = Math.min(time - (previousTime ?? time), 50);
-  const top = scrollRegion.scrollTop;
-  // The height metrics are rounded, while scrollTop can be fractional.
-  const bottom = scrollRegion.scrollHeight - scrollRegion.clientHeight - 1;
-  previousTime = time;
-
-  if (top !== previousTop) {
-    // Give manual scrolling priority before resuming from the player's position.
-    remainingDelay = dwellMs;
-    pixels = 0;
-  }
-  if (remainingDelay > 0) {
-    remainingDelay -= elapsed;
-  } else if (top >= bottom) {
-    scrollRegion.scrollTop = 0;
-    remainingDelay = dwellMs;
-    pixels = 0;
-  } else {
-    pixels += elapsed * scrollSpeed;
-    const step = Math.floor(pixels);
-    if (step > 0) {
-      scrollRegion.scrollTop = top + step;
-      pixels -= step;
-      if (scrollRegion.scrollTop >= bottom) {
-        scrollRegion.scrollTop = scrollRegion.scrollHeight;
-        remainingDelay = dwellMs;
-      }
-    }
-  }
-
-  previousTop = scrollRegion.scrollTop;
-  frame = requestAnimationFrame(advanceLeaderboard);
-}
+let animation;
+let animatedDistance;
 
 function syncLeaderboardScroll() {
-  const height = scrollRegion.clientHeight;
-  if (!height || scrollRegion.scrollHeight <= height || reducedMotion.matches || scrollRegion.matches(':focus-visible') || document.hidden) {
-    cancelAnimationFrame(frame);
-    frame = undefined;
-  } else if (frame === undefined) {
-    previousTime = undefined;
-    previousTop = scrollRegion.scrollTop;
-    remainingDelay = dwellMs;
-    pixels = 0;
-    frame = requestAnimationFrame(advanceLeaderboard);
+  const viewport = scrollWindow.clientHeight;
+  const distance = table.tHead.offsetHeight + rows.offsetHeight - viewport;
+
+  if (!viewport || distance <= 0 || reducedMotion.matches) {
+    animation?.cancel();
+    animation = undefined;
+    animatedDistance = undefined;
+    return;
+  }
+
+  if (distance !== animatedDistance) {
+    animation?.cancel();
+    animatedDistance = distance;
+    const travelMs = distance * 1000 / scrollSpeed;
+    const bottomStart = topPauseMs + travelMs;
+    const duration = bottomStart + bottomPauseMs;
+    const top = 'translateY(0px)';
+    const bottom = `translateY(${-distance}px)`;
+    // Move the rows under the fixed labels without creating a user-scrollable area.
+    animation = rows.animate([
+      { transform: top, offset: 0 },
+      { transform: top, offset: topPauseMs / duration },
+      { transform: bottom, offset: bottomStart / duration },
+      { transform: bottom, offset: 1 },
+    ], { duration, iterations: Infinity });
+  }
+
+  if (document.hidden) {
+    animation.pause();
+  } else if (animation.playState === 'paused') {
+    animation.play();
   }
 }
 
-scrollRegion.addEventListener('focus', syncLeaderboardScroll);
-scrollRegion.addEventListener('blur', syncLeaderboardScroll);
 document.addEventListener('visibilitychange', syncLeaderboardScroll);
 reducedMotion.addEventListener('change', syncLeaderboardScroll);
 
 const leaderboardResize = new ResizeObserver(syncLeaderboardScroll);
-leaderboardResize.observe(scrollRegion);
-leaderboardResize.observe(scrollRegion.firstElementChild);
+leaderboardResize.observe(scrollWindow);
+leaderboardResize.observe(table.tHead);
+leaderboardResize.observe(rows);
 syncLeaderboardScroll();

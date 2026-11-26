@@ -31,6 +31,8 @@ const files = new Map([
   ['vendor/archivo-black.woff2', 'node_modules/@fontsource/archivo-black/files/archivo-black-latin-400-normal.woff2'],
   ['vendor/space-mono.woff2', 'node_modules/@fontsource/space-mono/files/space-mono-latin-400-normal.woff2'],
   ['vendor/space-mono-bold.woff2', 'node_modules/@fontsource/space-mono/files/space-mono-latin-700-normal.woff2'],
+  ['vendor/cubic-11.woff2', 'assets/cubic-11.woff2'],
+  ['vendor/cubic-11-license.txt', 'assets/cubic-11-license.txt'],
   ['vendor/pixi-license.txt', 'node_modules/pixi.js/LICENSE'],
   ['vendor/archivo-black-license.txt', 'node_modules/@fontsource/archivo-black/LICENSE'],
   ['vendor/space-mono-license.txt', 'node_modules/@fontsource/space-mono/LICENSE'],
