@@ -225,8 +225,7 @@
   touch-action: manipulation;
 }
 
-.lobby-phone-trigger:hover { background: #1b2b3a; }
-.lobby-phone-trigger:focus-visible { outline-color: #a9c9db; }
+.lobby-phone-trigger:active { background: #1b2b3a; }
 
 .lobby-phone-dialog {
   --phone-view-top: 0px;
@@ -281,7 +280,6 @@
 }
 
 .lobby-phone input::placeholder { color: #b3a997; opacity: 1; }
-.lobby-phone input:focus { border-color: #91adbf; outline: none; }
 
 .lobby-phone-actions {
   display: grid;
@@ -302,20 +300,18 @@
   touch-action: manipulation;
 }
 
-.lobby-phone-actions button:focus-visible { outline-color: #a9c9db; }
-.lobby-phone-actions button:hover { background: #35485d; }
+.lobby-phone-actions button:active { background: #35485d; }
 .lobby-phone-actions .lobby-phone-done {
   border-color: #bf8582;
   background: #883e49;
   box-shadow: inset 0 2px #e7938a40, 0 2px #472834;
 }
-.lobby-phone-actions .lobby-phone-done:hover { background: #9a4c56; }
+.lobby-phone-actions .lobby-phone-done:active { background: #9a4c56; }
 
 .lobby-start {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 11px;
   min-height: clamp(49px, 7.2dvh, 81px);
   margin-top: clamp(12px, 1.9dvh, 23px);
   border: 2px solid #f4c982;
@@ -327,12 +323,9 @@
   font-weight: 900;
   letter-spacing: .08em;
   text-decoration: none;
-  transition: background-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 
-.lobby-start .play-icon { width: 12px; height: 14px; }
-.lobby-start:hover { background-color: #b34c56; }
-.lobby-start:active { transform: translateY(3px); box-shadow: inset 0 2px #ef9c8794, 0 2px #71472f, 0 5px #0b1521b3; }
+.lobby-start:active { box-shadow: inset 0 3px #561f2a80, 0 2px #71472f, 0 5px #0b1521b3; }
 
 .lobby-leaderboard {
   --leaderboard-data-size: 24px;
@@ -478,7 +471,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lobby-start { transition: none; }
   .lobby-leaderboard { grid-template-rows: auto auto auto; }
   .leaderboard-scroll { block-size: auto; contain: none; }
 }

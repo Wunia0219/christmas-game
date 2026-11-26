@@ -566,13 +566,8 @@ export async function initGame() {
     renderBrickEffects(seconds);
   });
 
-  gameView.addEventListener('pointerdown', () => {
-    gameView.classList.add('has-pointer-input');
-  }, { capture: true });
   window.addEventListener('keydown', (event) => {
-    if (gameView.hidden || gameView.inert || event.ctrlKey || event.metaKey || event.altKey) return;
-    gameView.classList.remove('has-pointer-input');
-    if (event.defaultPrevented) return;
+    if (event.defaultPrevented || gameView.hidden || gameView.inert || event.ctrlKey || event.metaKey || event.altKey) return;
     if (leftKeys.includes(event.code) || rightKeys.includes(event.code)) {
       event.preventDefault();
       pointerX = undefined;
@@ -659,7 +654,6 @@ export async function initGame() {
     setActive(active) {
       clearMovement();
       if (!active) {
-        gameView.classList.remove('has-pointer-input');
         app.stop();
         return;
       }
