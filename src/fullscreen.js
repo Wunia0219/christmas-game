@@ -1,7 +1,7 @@
 const tapWindowMs = 400;
 const tapSlop = 10;
 
-export function bindFullscreen(trigger, { announcement, focusAfterToggle } = {}) {
+export function bindFullscreen(trigger, { announcement, mouseFocusTarget } = {}) {
   if (!document.fullscreenEnabled) return;
 
   trigger.disabled = false;
@@ -46,13 +46,22 @@ export function bindFullscreen(trigger, { announcement, focusAfterToggle } = {})
   });
   trigger.addEventListener('pointercancel', cancelPress);
   trigger.addEventListener('lostpointercapture', cancelPress);
+  if (mouseFocusTarget) {
+    trigger.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      mouseFocusTarget.focus({ preventScroll: true });
+    });
+  }
   trigger.addEventListener('contextmenu', (event) => event.preventDefault());
+  trigger.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && event.repeat) event.preventDefault();
+  });
   trigger.addEventListener('click', (event) => {
     // Native keyboard and assistive-technology activation uses a click without a pointer.
     if (event.detail === 0 && !event.pointerType) void toggleFullscreen();
   });
   document.addEventListener('fullscreenchange', () => {
     trigger.setAttribute('aria-pressed', String(Boolean(document.fullscreenElement)));
-    if (document.activeElement === trigger) focusAfterToggle?.focus({ preventScroll: true });
   });
 }

@@ -14,11 +14,11 @@
   isolation: isolate;
   overflow: hidden;
   display: grid;
-  grid-template-rows: clamp(112px, 23dvh, 183px) minmax(0, 1fr) auto;
+  grid-template-rows: clamp(123px, 25dvh, 198px) minmax(0, 1fr);
   justify-items: center;
   align-items: center;
   padding: max(12px, 4dvh, env(safe-area-inset-top)) 10px max(10px, 3dvh, env(safe-area-inset-bottom));
-  background: #10263b;
+  background: #342016;
   animation: intro-appear 160ms ease-out both;
 }
 
@@ -30,31 +30,16 @@
 
 .intro-scene::before {
   z-index: -2;
-  inset: -3%;
-  background: url('../assets/intro-winter.webp') var(--intro-backdrop-position, center bottom) / cover no-repeat;
-  animation: intro-camera 4650ms cubic-bezier(.18,.55,.36,1) both;
+  inset: 0;
+  background: url('../assets/intro-gift-room.webp') var(--intro-backdrop-position, center bottom) / cover no-repeat;
 }
 
 .intro-scene::after {
   z-index: -1;
   inset: 0;
   background:
-    radial-gradient(ellipse at 54% 64%, transparent 15%, #0a172834 72%, #06101e6e),
-    linear-gradient(#0a17284c, transparent 31% 64%, #0b1b3180);
-}
-
-.intro-snow {
-  position: absolute;
-  z-index: -1;
-  inset: -65px -25px 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 14% 24%, #fff5d0a8 0 1px, transparent 1.8px),
-    radial-gradient(circle at 79% 42%, #d1e8ffbf 0 1px, transparent 1.75px),
-    radial-gradient(circle at 49% 63%, #fff2deb8 0 1.4px, transparent 2.1px),
-    radial-gradient(circle at 27% 86%, #dcefff69 0 1.2px, transparent 2px);
-  background-size: 153px 172px, 221px 189px, 307px 221px, 193px 231px;
-  animation: intro-snowfall 6000ms linear both;
+    radial-gradient(ellipse at 50% 76%, transparent 34%, #1c0e123b 85%),
+    linear-gradient(#1b101648, transparent 34% 81%, #1c0e1239);
 }
 
 .intro-recipients {
@@ -67,7 +52,6 @@
   display: grid;
   justify-items: center;
   gap: clamp(4px, 1.2dvh, 11px);
-  animation: intro-cards-in 280ms cubic-bezier(.19,.72,.36,1) both;
 }
 
 .intro-header h2 {
@@ -80,37 +64,29 @@
 .intro-organizations {
   display: flex;
   justify-content: center;
-  gap: clamp(6px, 2vw, 16px);
+  gap: clamp(13px, 4vw, 44px);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.intro-organizations li, .intro-brand {
+.intro-organizations li {
   display: flex;
   align-items: center;
-  gap: clamp(5px, 1.3vw, 11px);
+  gap: clamp(5px, 1.5vw, 13px);
+  color: #fff1d3;
+  font-size: clamp(.875rem, 4vw, 1.45rem);
   font-weight: 800;
   white-space: nowrap;
-}
-
-.intro-organizations li {
-  min-height: 40px;
-  padding: clamp(4px, 1dvh, 8px) clamp(5px, 2vw, 15px);
-  border: 1px solid #d8ac72;
-  border-radius: 9px;
-  background: linear-gradient(130deg, #493224f5, #241b20f5);
-  box-shadow: inset 0 0 10px #ffa84c15, 0 3px 16px #090e1b86;
-  font-size: clamp(.81rem, 3.35vw, 1.1rem);
+  text-shadow: 0 2px 4px #24150c, 0 0 17px #ffc57755;
 }
 
 .intro-organizations img {
   display: block;
-  width: clamp(26px, 8vw, 44px);
-  height: auto;
-  aspect-ratio: 1;
-  border-radius: 50%;
+  width: clamp(36px, min(11vw, 8.6dvh), 68px);
+  height: clamp(36px, min(11vw, 8.6dvh), 68px);
   object-fit: contain;
+  filter: drop-shadow(0 1px 6px #ffbf685f);
 }
 
 .intro-participation {
@@ -123,65 +99,82 @@
 .intro-participation strong { font-family: var(--mono); }
 
 .intro-act {
-  position: relative;
-  width: min(87vw, 57dvh, 440px);
+  /* Horizontal anchor of the box within each sprite cell. */
+  --intro-box-center: 69%;
+  position: absolute;
+  left: 50%;
+  bottom: clamp(52px, 10dvh, 88px);
+  translate: calc(0% - var(--intro-box-center)) 0;
+  width: min(78%, 57dvh, 460px);
   aspect-ratio: 1;
-  align-self: center;
 }
+
+.intro-act::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 27% 11% at var(--intro-box-center) 96%, #ffbf72aa, #ffac6630 45%, transparent 90%);
+  opacity: 0;
+  transition: opacity 420ms ease-out;
+}
+
+.is-open .intro-act::before { opacity: .76; }
 
 .intro-ground {
   position: absolute;
-  inset: auto -10% 0;
-  height: 19%;
-  background: radial-gradient(ellipse, #ffe0a28f, #d7986660 38%, transparent 71%);
+  inset: 0;
+  /* The seated giraffe and the box rest on row 238 of the 256-pixel cell. */
+  background: radial-gradient(ellipse 43% 6% at 52% 94%, #33180f78, transparent 83%);
 }
+
+.intro-ground::before, .intro-ground::after {
+  content: '';
+  position: absolute;
+  top: 91.2%;
+  height: 4.2%;
+  background: radial-gradient(ellipse, #291312ba, #30170d56 50%, transparent 73%);
+}
+
+.intro-ground::before { left: 13%; width: 42%; }
+.intro-ground::after { left: 49%; width: 42%; }
 
 .intro-actor {
   position: absolute;
   inset: 0;
   background: url('../assets/sprites/intro-gift-unwrapping.webp') 0 0 / 500% 500% no-repeat;
-  filter: drop-shadow(0 8px 7px #07101e8c);
+  filter: drop-shadow(2px 2px 2px #3a1b1559);
 }
 
 .intro-gift-light {
   position: absolute;
   z-index: 1;
-  left: 72%;
+  left: var(--intro-box-center);
   top: 69%;
   pointer-events: none;
 }
 
-.intro-gift-light::before {
+.intro-gift-light::before, .intro-gift-light::after {
   content: '';
-  display: block;
   position: absolute;
-  width: clamp(104px, 30dvh, 260px);
   aspect-ratio: 1;
   translate: -50% -50%;
   opacity: 0;
-  background: radial-gradient(ellipse, #fff0b1a6, #ffd07d5c 23%, #ffc1711c 47%, transparent 69%);
+}
+
+.intro-gift-light::before {
+  width: clamp(150px, 43dvh, 340px);
+  background: radial-gradient(circle, #fff8db 0 8%, #ffe4a3d9 22%, #ffc1746e 40%, #ffa35024 56%, transparent 71%);
   mix-blend-mode: screen;
 }
 
-.is-open .intro-gift-light::before { animation: intro-gift-glow 590ms ease-out both; }
-
-.intro-brand {
-  align-self: end;
-  margin: 0;
-  padding: 4px 12px 4px 5px;
-  border: 1px solid #b58a5caa;
-  border-radius: 30px;
-  background: #211c23e8;
-  color: #fff1d6;
-  font-size: clamp(.78rem, 3.2vw, .97rem);
+.intro-gift-light::after {
+  width: clamp(66px, 17dvh, 135px);
+  background: radial-gradient(circle, #fff9e3 23%, #ffe1a3 43%, #ffd286 60%, transparent 75%);
+  clip-path: polygon(50% 0, 58% 38%, 64% 43%, 100% 50%, 64% 57%, 58% 62%, 50% 100%, 42% 62%, 36% 57%, 0 50%, 36% 43%, 42% 38%);
 }
 
-.intro-brand img {
-  display: block;
-  width: clamp(23px, 6vw, 34px);
-  height: auto;
-  clip-path: circle(45%);
-}
+.is-open .intro-gift-light::before { animation: intro-gift-glow 760ms ease-out both; }
+.is-open .intro-gift-light::after { animation: intro-gift-flash 430ms ease-out both; }
 
 .intro-warm-wash {
   position: absolute;
@@ -197,39 +190,30 @@
   to { opacity: 1; }
 }
 
-@keyframes intro-camera {
-  from { transform: scale(1.015); }
-  to { transform: scale(1.07); }
-}
-
-@keyframes intro-snowfall {
-  from { transform: translate(-4px, 0); }
-  to { transform: translate(16px, 67px); }
-}
-
-@keyframes intro-cards-in {
-  from { opacity: 0; transform: translateY(9px); }
-  to { opacity: 1; transform: none; }
-}
-
 @keyframes intro-gift-glow {
-  0% { opacity: 0; transform: scale(.55); }
-  28% { opacity: .95; }
-  100% { opacity: .56; transform: scale(1.05); }
+  0% { opacity: 0; transform: scale(.22); }
+  20% { opacity: .96; transform: scale(1); }
+  66% { opacity: .36; transform: scale(1.13); }
+  100% { opacity: .3; transform: scale(.63); }
+}
+
+@keyframes intro-gift-flash {
+  0% { opacity: 0; transform: scale(.18); }
+  27% { opacity: .95; transform: scale(1); }
+  100% { opacity: 0; transform: scale(.58); }
 }
 
 @media (orientation: portrait) {
-  .entry-intro { --intro-backdrop-position: 21% bottom; }
+  .entry-intro { --intro-backdrop-position: 19% bottom; }
 }
 
 @media (max-height: 480px) and (orientation: landscape) {
-  .intro-scene { grid-template: minmax(0, 1fr) auto / repeat(2, minmax(0, 1fr)); }
-  .intro-recipients { align-self: center; grid-column: 2; }
-  .intro-act { grid-row: 1; grid-column: 1; width: min(44vw, 82dvh); }
-  .intro-brand { grid-column: 1 / -1; }
+  .intro-scene { grid-template-rows: clamp(75px, 27dvh, 120px) minmax(0, 1fr); }
+  .intro-act { bottom: clamp(28px, 9dvh, 42px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .intro-scene, .intro-scene::before, .intro-snow, .intro-header,
-  .is-open .intro-gift-light::before { animation: none; }
+  .intro-scene, .is-open .intro-gift-light::before,
+  .is-open .intro-gift-light::after { animation: none; }
+  .intro-act::before { transition: none; }
 }

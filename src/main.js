@@ -10,7 +10,6 @@ const frame = field.closest('.game-frame');
 const overlay = byId('overlay');
 const actionButton = byId('action');
 const levelReadout = byId('level-readout');
-const fullscreenTrigger = byId('fullscreen-trigger');
 const score = byId('score');
 const scoreValue = byId('score-value');
 const scorePixels = byId('score-pixels');
@@ -567,14 +566,19 @@ export async function initGame() {
     renderBrickEffects(seconds);
   });
 
+  gameView.addEventListener('pointerdown', () => {
+    gameView.classList.add('has-pointer-input');
+  }, { capture: true });
   window.addEventListener('keydown', (event) => {
     if (gameView.hidden || gameView.inert || event.ctrlKey || event.metaKey || event.altKey) return;
+    gameView.classList.remove('has-pointer-input');
+    if (event.defaultPrevented) return;
     if (leftKeys.includes(event.code) || rightKeys.includes(event.code)) {
       event.preventDefault();
       pointerX = undefined;
       keys.add(event.code);
     }
-    if (event.code === 'Space' && (event.target === fullscreenTrigger || !event.target.closest?.('button, a'))) {
+    if (event.code === 'Space' && !event.target.closest?.('button, a')) {
       event.preventDefault();
       if (!event.repeat && game.phase !== 'playing') primaryAction();
     }
@@ -587,6 +591,7 @@ export async function initGame() {
     gesture = undefined;
   }
   window.addEventListener('blur', clearMovement);
+  document.addEventListener('fullscreenchange', clearMovement);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) clearMovement();
   });
@@ -654,6 +659,7 @@ export async function initGame() {
     setActive(active) {
       clearMovement();
       if (!active) {
+        gameView.classList.remove('has-pointer-input');
         app.stop();
         return;
       }

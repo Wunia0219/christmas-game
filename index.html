@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="./src/lobby.css" />
     <link rel="stylesheet" href="./src/intro.css" />
     <link rel="preload" href="./assets/sprites/intro-gift-unwrapping.webp" as="image" fetchpriority="low" />
-    <link rel="preload" href="./assets/intro-winter.webp" as="image" fetchpriority="low" />
+    <link rel="preload" href="./assets/intro-gift-room.webp" as="image" fetchpriority="low" />
     <script type="importmap">
       { "imports": { "pixi.js": "./vendor/pixi.mjs" } }
     </script>
@@ -181,7 +181,6 @@
 
     <section class="entry-intro" id="entry-intro" aria-labelledby="intro-title" tabindex="-1" hidden>
       <div class="intro-scene" id="intro-scene">
-        <div class="intro-snow" aria-hidden="true"></div>
         <div class="intro-recipients" aria-live="polite">
           <header class="intro-header" id="intro-header" hidden>
             <h2 id="intro-title">這個聖誕，有你一起送暖。</h2>
@@ -198,7 +197,6 @@
           <span class="intro-gift-light" id="intro-gift-light"></span>
           <div class="intro-actor" id="intro-actor"></div>
         </div>
-        <p class="intro-brand"><img src="./assets/organizations/dongshi-giraffe.webp" alt="" width="36" height="36" /><span>東勢長頸鹿美語</span></p>
       </div>
       <span class="intro-warm-wash" id="intro-warm-wash" aria-hidden="true"></span>
     </section>

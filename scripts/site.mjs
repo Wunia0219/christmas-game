@@ -23,7 +23,7 @@ const files = new Map([
   ['assets/christmas-forest.webp', 'assets/christmas-forest.webp'],
   ['assets/lobby-snow.webp', 'assets/lobby-snow.webp'],
   ['assets/lobby-dongshi-winter.webp', 'assets/lobby-dongshi-winter.webp'],
-  ['assets/intro-winter.webp', 'assets/intro-winter.webp'],
+  ['assets/intro-gift-room.webp', 'assets/intro-gift-room.webp'],
   ['assets/sprites/intro-gift-unwrapping.webp', 'assets/sprites/intro-gift-unwrapping.webp'],
   ['assets/music/10-winter_tale.mp3', 'assets/music/10-winter_tale.mp3'],
   ['assets/music/8-ringing_of_bells.mp3', 'assets/music/8-ringing_of_bells.mp3'],

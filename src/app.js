@@ -20,7 +20,7 @@ bindFullscreen(document.getElementById('lobby-fullscreen'), {
 });
 bindFullscreen(document.getElementById('fullscreen-trigger'), {
   announcement: gameAnnouncement,
-  focusAfterToggle: field,
+  mouseFocusTarget: field,
 });
 
 let showingGame;

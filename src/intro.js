@@ -1,6 +1,8 @@
 const intro = document.getElementById('entry-intro');
 const scene = document.getElementById('intro-scene');
 const header = document.getElementById('intro-header');
+const title = document.getElementById('intro-title');
+const recipients = header.querySelectorAll('.intro-organizations li');
 const actor = document.getElementById('intro-actor');
 const giftLight = document.getElementById('intro-gift-light');
 const wash = document.getElementById('intro-warm-wash');
@@ -14,6 +16,33 @@ const halfOpenFrame = 21;
 const openFrame = 22;
 const halfOpenHold = 240;
 const recipientHold = 2100;
+const flightDuration = 850;
+const flightDelay = 145;
+const flightStagger = 190;
+
+function flyFromGift(recipient, source, index) {
+  const target = recipient.getBoundingClientRect();
+  const x = source.left - (target.left + target.width / 2);
+  const y = source.top - (target.top + target.height / 2);
+  const side = index === 0 ? -1 : 1;
+  const lift = Math.min(76, Math.abs(y) * .25);
+  // The left-hand route rises past the giraffe before sweeping across.
+  const clearance = side < 0 ? Math.min(56, target.width * .29) : 20;
+  const sweepX = side < 0 ? x + clearance * .75 : x * .42 + 15;
+  const sweepY = y * (side < 0 ? .21 : .31) - lift * .22;
+  const pose = (dx, dy, angle, scale) => `translate(${dx}px, ${dy}px) rotate(${side * angle}deg) scale(${scale})`;
+  return recipient.animate([
+    { transform: pose(x, y, 12, .32), opacity: 0, offset: 0, easing: 'ease-out' },
+    { transform: pose(x + clearance, y - lift * .72, 14, .63), opacity: 1, offset: .18 },
+    { transform: pose(sweepX, sweepY, 8, .93), opacity: 1, offset: .51 },
+    { transform: pose(side * 15, -lift * .34, -4, 1.05), opacity: 1, offset: .81, easing: 'ease-in-out' },
+    { transform: 'none', opacity: 1, offset: 1 },
+  ], {
+    duration: flightDuration,
+    delay: flightDelay + index * flightStagger,
+    fill: 'backwards',
+  });
+}
 
 export function openEntryIntro({ preview, onGiftOpen }) {
   const reduced = reducedMotion.matches;
@@ -36,7 +65,22 @@ export function openEntryIntro({ preview, onGiftOpen }) {
     if (index >= openFrame && header.hidden) {
       header.hidden = false;
       scene.classList.add('is-open');
-      holdTimer = setTimeout(endHold, recipientHold);
+      let landingTime = 0;
+      if (!reduced) {
+        const source = giftLight.getBoundingClientRect();
+        recipients.forEach((recipient, index) => {
+          animations.push(flyFromGift(recipient, source, index));
+        });
+        landingTime = flightDelay + (recipients.length - 1) * flightStagger + flightDuration;
+        for (const caption of [title, preview ? demo : personal]) {
+          animations.push(caption.animate([{ opacity: 0 }, { opacity: 1 }], {
+            delay: landingTime - 120,
+            duration: 220,
+            fill: 'backwards',
+          }));
+        }
+      }
+      holdTimer = setTimeout(endHold, landingTime + recipientHold);
       if (!reduced) onGiftOpen();
     }
   }
