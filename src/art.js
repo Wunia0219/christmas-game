@@ -350,22 +350,18 @@ export function drawRail(graphic, x, y, width, height, kind, warning) {
 }
 
 const paddleSparkSpread = [
-  [-28, 2, 3, 0xf6b866],
-  [-18, 5, 2, 0xffdc96],
-  [-12, 1, 2, 0xffe9ab],
-  [12, 1, 2, 0xffe9ab],
-  [19, 5, 3, 0xffcf74],
-  [28, 2, 2, 0xffb765],
+  [-19, 2, 2, 0xf6b866],
+  [-12, 3, 2, 0xffe9ab],
+  [12, 3, 2, 0xffe9ab],
+  [19, 2, 2, 0xffb765],
 ];
 
 export function drawPaddleImpact(graphic, x, y, progress, reduced) {
   const centerX = Math.round(x);
   const top = Math.round(y);
   const remaining = 1 - progress;
-  const coreAlpha = reduced ? remaining * 0.8 : Math.max(0, 1 - progress * 2.5);
-  if (coreAlpha > 0) {
-    graphic.rect(centerX - 5, top, 11, 2).fill({ color: cream, alpha: coreAlpha });
-  }
+  const coreAlpha = reduced ? remaining * 0.8 : remaining ** 2;
+  graphic.rect(centerX - 6, top, 13, 2).fill({ color: cream, alpha: coreAlpha });
   if (reduced) return;
 
   // Begin outside the ball's silhouette and spread out along the paddle.

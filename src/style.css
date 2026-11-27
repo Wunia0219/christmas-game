@@ -245,14 +245,38 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   100% { opacity: 0; }
 }
 
+.launch-countdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: clamp(6px, 2cqh, 14px);
+  background: #091812a8;
+  pointer-events: none;
+}
+.launch-countdown p {
+  color: var(--snow);
+  font: 400 clamp(1rem, min(4cqw, 7cqh), 2rem)/1 'Archivo Black', sans-serif;
+  letter-spacing: .08em;
+  text-shadow: 0 2px #422734;
+}
+.launch-countdown canvas {
+  display: block;
+  width: min(29cqw, 25cqh, 8.5rem);
+  height: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 5px #61313b);
+}
+
 .overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 8px; background: #081813d9; text-align: center; pointer-events: none; }
-[data-phase='ready'] .overlay, [data-phase='serve'] .overlay {
+[data-phase='serve'] .overlay {
   inset: max(67%, calc(var(--layout-bottom, 48%) + 1%)) 0 10%;
   padding: 0 5px;
   background: none;
 }
 @container (max-height: 500px) {
-  [data-phase='ready'] .overlay-content, [data-phase='serve'] .overlay-content {
+  [data-phase='serve'] .overlay-content {
     grid-auto-flow: column;
     align-items: center;
     gap: 12px;

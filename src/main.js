@@ -15,6 +15,9 @@ const scoreValue = byId('score-value');
 const scorePixels = byId('score-pixels');
 const clockValue = byId('time-value');
 const clockPixels = byId('time-pixels');
+const launchCountdown = byId('launch-countdown');
+const countdownLevel = byId('countdown-level');
+const countdownPixels = byId('countdown-pixels');
 const levelBonus = byId('level-bonus');
 const timeBonus = byId('time-bonus');
 const scorePopups = byId('score-popups');
@@ -25,11 +28,11 @@ const hearts = [...lives.children];
 
 const blastDuration = 0.28;
 const shakeDuration = 0.18;
-const sparkDuration = 0.28;
-const hardFlashDuration = 0.19;
+const brickSparkDuration = 0.18;
+const shieldSparkDuration = 0.28;
+const hardFlashDuration = 0.14;
 const ballFlashDuration = 0.26;
-const paddleImpactDuration = 0.18;
-const paddleImpactAnchor = 13;
+const paddleImpactDuration = 0.11;
 const multiballScoreLift = 34;
 const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護', cannons: '雙側砲台' };
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -47,10 +50,10 @@ function expiryWarning(timeLeft) {
 }
 
 const screens = {
-  ready: { status: '準備就緒', button: '發球' },
+  ready: { status: '準備就緒' },
   playing: { status: '遊戲進行中' },
   'life-loss': { status: '漏接' },
-  serve: { status: '等待發球', title: '再發一球', button: '發球' },
+  serve: { title: '再發一球', button: '發球' },
   'level-clear': { status: '關卡完成', title: '關卡完成！', button: '下一關' },
   lost: { status: '遊戲結束', title: '遊戲結束', button: '再玩一次' },
   'time-up': { status: '時間到', title: '時間到！', button: '再玩一次' },
@@ -60,9 +63,9 @@ const screens = {
 const tones = {
   launch: [440, 600, 0.09],
   wall: [190, 160, 0.045],
-  paddle: [300, 400, 0.07],
-  brick: [600, 900, 0.075],
-  'brick-damage': [250, 205, 0.075],
+  paddle: [460, 350, 0.048],
+  brick: [680, 930, 0.065],
+  'brick-damage': [310, 180, 0.085],
   'brick-reveal': [520, 780, 0.085],
   'tnt-armed': [390, 620, 0.13],
   'tnt-explode': [118, 43, 0.32],
@@ -85,7 +88,7 @@ async function playLaunchSound() {
   const Audio = window.AudioContext || window.webkitAudioContext;
   if (!Audio) return;
   try {
-    // Create or resume audio from the gesture that serves the ball.
+    // A countdown can launch after the original user gesture.
     audio ??= new Audio();
     if (audio.state !== 'running') await audio.resume();
     playSound('launch');
@@ -121,6 +124,7 @@ function playSound(event) {
   const [start, end, duration] = effect;
   const now = audio.currentTime;
   const explosion = event === 'tnt-explode';
+  const hardHit = event === 'brick-damage';
   // Keep a cluster of simultaneous brick hits from drowning out the blast.
   if ((explosion || event === 'brick') && now - lastExplosionAt < 0.055) return;
   if (explosion) {
@@ -129,11 +133,11 @@ function playSound(event) {
   }
   const tone = audio.createOscillator();
   const gain = audio.createGain();
-  tone.type = 'triangle';
+  tone.type = hardHit ? 'square' : 'triangle';
   tone.frequency.setValueAtTime(start, now);
   tone.frequency.exponentialRampToValueAtTime(end, now + duration);
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(explosion ? 0.25 : 0.12, now + 0.008);
+  gain.gain.exponentialRampToValueAtTime(explosion ? 0.25 : hardHit ? 0.065 : 0.12, now + 0.008);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   tone.connect(gain).connect(audio.destination);
   tone.start(now);
@@ -163,7 +167,7 @@ function burstShield(sparks, brick) {
       y: centerY + dy * brick.height * 0.46,
       vx: dx * (62 + index % 3 * 34),
       vy: dy * (55 + index % 3 * 34),
-      life: sparkDuration,
+      life: shieldSparkDuration,
       color: index % 2 === 0 ? assist.ice : 0x5599d7,
       shardX: dx * (4 + index % 3),
       shardY: dy * (4 + index % 3),
@@ -208,8 +212,10 @@ export async function initGame() {
   let paddleImpacts = [];
   let lifeLoss;
   let heartPulse;
+  let phaseStartedAt = -Infinity;
   const game = new Game((event, payload, spawnedBalls) => {
     if (event === 'launch') {
+      phaseStartedAt = performance.now();
       void playLaunchSound();
       return;
     }
@@ -260,13 +266,13 @@ export async function initGame() {
         showScorePopup(game, brick.points, brick.x + brick.width / 2, brick.y + brick.height / 2 - lift);
       }
       if (!reducedMotion.matches) {
-        for (let index = 0; index < 7; index += 1) {
+        for (let index = 0; index < 4; index += 1) {
           sparks.push({
-            x: brick.x + brick.width * (index + 1) / 8,
+            x: brick.x + brick.width * (index + 1) / 5,
             y: brick.y + brick.height / 2,
-            vx: (Math.random() - 0.5) * 180,
-            vy: (Math.random() - 0.5) * 150,
-            life: sparkDuration,
+            vx: (Math.random() - 0.5) * 120,
+            vy: (Math.random() - 0.5) * 100,
+            life: brickSparkDuration,
             color: brickColor(brick),
           });
         }
@@ -278,11 +284,11 @@ export async function initGame() {
   let displayedPhase;
   let displayedScore;
   let displayedTime;
+  let displayedLaunchNumber;
   let scorePulse;
   let displayedLives;
   let pointerX;
   let gesture;
-  let clockStartedAt = -Infinity;
 
   function startLifeLoss(x) {
     const reduced = reducedMotion.matches;
@@ -369,17 +375,28 @@ export async function initGame() {
       lifeLossFlash.hidden = true;
     }
     const phase = lifeLoss ? 'life-loss' : game.phase;
+    const launchNumber = phase === 'countdown' ? Math.ceil(game.launchIn) : 0;
+    if (displayedLaunchNumber !== launchNumber) {
+      displayedLaunchNumber = launchNumber;
+      if (launchNumber) {
+        countdownLevel.textContent = LEVEL_NAMES[game.level - 1];
+        drawScore(countdownPixels, String(launchNumber), { color: '#ffdf9a', outline: '#352223' });
+        announcement.textContent = `${countdownLevel.textContent}，${launchNumber} 秒後發球。`;
+      }
+    }
     if (displayedPhase === phase && !levelChanged) return;
     const screen = screens[phase];
     const wasPlaying = displayedPhase === 'playing' || displayedPhase === 'life-loss';
     displayedPhase = phase;
     frame.dataset.phase = phase;
-    announcement.textContent = phase === 'serve' ? `剩下 ${game.lives} 條命。${screen.title}。` : screen.status;
-    overlay.hidden = phase === 'playing' || phase === 'life-loss';
+    if (phase === 'serve') announcement.textContent = `剩下 ${game.lives} 條命。等待發球，計時暫停。`;
+    else if (screen) announcement.textContent = screen.status;
+    launchCountdown.hidden = phase !== 'countdown';
+    overlay.hidden = !screen?.button;
     levelReadout.hidden = phase === 'ready';
     if (overlay.hidden) return;
     pointerX = undefined;
-    byId('message').textContent = phase === 'ready' ? LEVEL_NAMES[game.level - 1] : screen.title;
+    byId('message').textContent = screen.title;
     byId('action-label').textContent = screen.button;
     const detail = byId('detail');
     detail.hidden = phase !== 'won' && phase !== 'lost' && phase !== 'time-up';
@@ -394,9 +411,9 @@ export async function initGame() {
   }
 
   function primaryAction() {
-    if (lifeLoss) return;
-    if (!game.countdownRunning) clockStartedAt = performance.now();
+    if (lifeLoss || game.phase === 'countdown') return;
     game.action();
+    if (game.phase === 'countdown') phaseStartedAt = performance.now();
     syncHud();
     field.focus({ preventScroll: true });
   }
@@ -408,17 +425,10 @@ export async function initGame() {
   function renderPaddle() {
     const reduced = reducedMotion.matches;
     const latest = paddleImpacts.at(-1);
-    let stretch = 0;
-    if (latest && !reduced) {
-      const progress = latest.age / paddleImpactDuration;
-      // Recover from compression, then briefly stretch before returning to rest.
-      stretch = progress < 0.4
-        ? -0.34 * (1 - progress / 0.4) ** 2
-        : 0.13 * Math.sin((progress - 0.4) / 0.6 * Math.PI);
-    }
-    paddle.position.set(game.paddleX, game.paddleY - paddleImpactAnchor * stretch);
-    paddle.scale.y = 1 + stretch;
-    paddleBody.scale.x = game.paddleWidth / PADDLE.width * (1 - stretch * 0.16);
+    const compression = latest && !reduced ? 0.16 * (1 - latest.age / paddleImpactDuration) ** 2 : 0;
+    paddle.position.set(game.paddleX, game.paddleY);
+    paddle.scale.y = 1 - compression;
+    paddleBody.scale.x = game.paddleWidth / PADDLE.width;
 
     leftCannon.visible = rightCannon.visible = game.effectTimeLeft('cannons') > 0;
     if (leftCannon.visible) {
@@ -520,7 +530,7 @@ export async function initGame() {
       flash.life -= seconds;
       const { brick, life } = flash;
       if (!brick.active || life <= 0) continue;
-      drawHardCrack(particles, brick, brick.x, brick.y, life / hardFlashDuration * 0.45);
+      drawHardCrack(particles, brick, brick.x, brick.y, life / hardFlashDuration * 0.65);
     }
     durabilityFlashes = durabilityFlashes.filter(({ brick, life }) => brick.active && life > 0);
 
@@ -532,7 +542,7 @@ export async function initGame() {
         spark.y += spark.vy * seconds;
       }
       const { x, y, color, shardX, shardY } = spark;
-      const alpha = spark.life / sparkDuration;
+      const alpha = spark.life / (shardX === undefined ? brickSparkDuration : shieldSparkDuration);
       if (shardX !== undefined) {
         particles.poly([
           x + shardX, y + shardY,
@@ -541,14 +551,15 @@ export async function initGame() {
           x + shardY * 0.45, y - shardX * 0.45,
         ]).fill({ color, alpha }).stroke({ color: 0xeaffff, width: 0.75, alpha });
       } else if (!reduced) {
-        particles.rect(x, y, 4, 4).fill({ color, alpha });
+        particles.rect(x, y, 3, 3).fill({ color, alpha });
       }
     }
     sparks = sparks.filter((spark) => spark.life > 0);
   }
 
   app.ticker.add((ticker) => {
-    const elapsedSeconds = Math.min(ticker.elapsedMS, performance.now() - clockStartedAt) / 1000;
+    if (game.phase === 'ready' && !gameView.inert && !document.hidden) primaryAction();
+    const elapsedSeconds = Math.min(ticker.elapsedMS, performance.now() - phaseStartedAt) / 1000;
     const seconds = Math.min(ticker.deltaMS / 1000, elapsedSeconds, 0.04);
     const direction = Number(rightKeys.some((key) => keys.has(key))) - Number(leftKeys.some((key) => keys.has(key)));
     updateLifeLoss(seconds);
@@ -560,7 +571,8 @@ export async function initGame() {
       if (life <= seconds) ballFlashes.delete(ball);
       else ballFlashes.set(ball, life - seconds);
     }
-    game.update(seconds, { direction, pointerX, elapsedSeconds });
+    const countdownElapsed = document.hidden ? 0 : Math.min(ticker.deltaMS / 1000, elapsedSeconds);
+    game.update(seconds, { direction, pointerX, elapsedSeconds: game.phase === 'countdown' ? countdownElapsed : elapsedSeconds });
     syncHud();
     renderPlayfield();
     renderBrickEffects(seconds);
@@ -593,16 +605,20 @@ export async function initGame() {
 
   function moveToPointer(event) {
     const bounds = field.getBoundingClientRect();
-    const x = (event.clientX - bounds.left) / bounds.width * game.width;
-    if (game.phase === 'playing') pointerX = x;
-    else game.movePaddle(x);
+    if (!bounds.width) return;
+    const scale = game.width / bounds.width;
+    pointerX = gesture?.paddleX === undefined
+      ? (event.clientX - bounds.left) * scale
+      : gesture.paddleX + (event.clientX - gesture.x) * scale;
   }
 
   field.addEventListener('pointerdown', (event) => {
-    if (event.target.closest('button') || !event.isPrimary || event.button !== 0) return;
+    if (gesture || event.target.closest('button') || !event.isPrimary || event.button !== 0) return;
     field.focus({ preventScroll: true });
-    moveToPointer(event);
-    gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, dragged: false };
+    const mouse = event.pointerType === 'mouse';
+    gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, paddleX: mouse ? undefined : game.paddleX, dragged: false };
+    if (mouse) moveToPointer(event);
+    else pointerX = undefined;
     field.setPointerCapture(event.pointerId);
   });
   field.addEventListener('pointermove', (event) => {
@@ -610,16 +626,24 @@ export async function initGame() {
     if (gesture?.id === event.pointerId) {
       gesture.dragged ||= Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 9;
       moveToPointer(event);
-    } else if (event.pointerType === 'mouse') {
+    } else if (!gesture && event.pointerType === 'mouse') {
       moveToPointer(event);
     }
   });
   field.addEventListener('pointerup', (event) => {
     if (gesture?.id !== event.pointerId) return;
-    if (!gesture.dragged && (game.phase === 'ready' || game.phase === 'serve')) primaryAction();
+    gesture.dragged ||= Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 9;
+    if (gesture.dragged) moveToPointer(event);
+    if (!gesture.dragged && game.phase === 'serve') primaryAction();
     gesture = undefined;
   });
-  field.addEventListener('lostpointercapture', () => { gesture = undefined; });
+  function cancelGesture(event) {
+    if (gesture?.id !== event.pointerId) return;
+    gesture = undefined;
+    pointerX = undefined;
+  }
+  field.addEventListener('pointercancel', cancelGesture);
+  field.addEventListener('lostpointercapture', cancelGesture);
 
   actionButton.addEventListener('click', primaryAction);
   byId('level-total').textContent = ` / ${number(LEVELS, 2)}`;
@@ -643,6 +667,7 @@ export async function initGame() {
       paddleImpacts.length = 0;
       scorePopups.replaceChildren();
       pointerX = undefined;
+      gesture = undefined;
     }
     app.renderer.resize(courtWidth, courtHeight, Math.min(devicePixelRatio, 2) * scale);
     renderPlayfield();
@@ -658,7 +683,7 @@ export async function initGame() {
         return;
       }
       game.reset();
-      clockStartedAt = -Infinity;
+      phaseStartedAt = -Infinity;
       scoringBlast = false;
       syncHud();
       app.start();

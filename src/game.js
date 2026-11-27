@@ -3,6 +3,7 @@ export const HEIGHT = 480;
 export const BRICK = { width: 48.4, height: 19 };
 export const LIVES = 3;
 export const ROUND_SECONDS = 120;
+export const LAUNCH_COUNTDOWN_SECONDS = 3;
 export const TIME_BONUS_RATE = 20;
 export const BALL_RADIUS = 7;
 export const PADDLE = { width: 112, height: 16, y: 447 };
@@ -175,7 +176,10 @@ const BRICK_KINDS = {
 };
 const INITIAL_SPEED = 365;
 const MAX_SPEED = 585;
-const PADDLE_SPEED = 700;
+const MIN_PADDLE_SPEED = 700;
+const PADDLE_CROSSING_SECONDS = 1.05;
+const POINTER_SPEED_MULTIPLIER = 1.25;
+const PADDLE_EDGE_INSET = 8;
 const PADDLE_GRACE_TIME = 0.045;
 const PADDLE_GRACE_DEPTH = 18;
 const DROP_SPEED = 145;
@@ -321,7 +325,7 @@ export class Game {
     this.width = width;
     this.height = height;
     this.paddleX = this.clampPaddleX(this.paddleX * widthRatio);
-    if (this.phase === 'ready' || this.phase === 'serve') this.stageBall();
+    if (this.phase === 'ready' || this.phase === 'countdown' || this.phase === 'serve') this.stageBall();
     return true;
   }
 
@@ -346,6 +350,7 @@ export class Game {
     this.clearPowerUps();
     this.paddleX = this.width / 2;
     this.stageBall();
+    this.launchIn = 0;
     this.phase = phase;
   }
 
@@ -379,32 +384,52 @@ export class Game {
   }
 
   get paddleSpeed() {
-    return PADDLE_SPEED * (this.effectTimeLeft('fast') > 0 ? 1.6 : 1);
+    const travel = this.width - PADDLE.width - PADDLE_EDGE_INSET * 2;
+    const speed = Math.max(MIN_PADDLE_SPEED, travel / PADDLE_CROSSING_SECONDS);
+    return speed * (this.effectTimeLeft('fast') > 0 ? 1.6 : 1);
   }
 
   get countdownRunning() {
-    return this.phase === 'playing' || this.phase === 'serve';
+    return this.phase === 'playing';
   }
 
   clampPaddleX(x) {
-    const half = this.paddleWidth / 2;
-    return clamp(x, half + 8, this.width - half - 8);
+    const edge = this.paddleWidth / 2 + PADDLE_EDGE_INSET;
+    return clamp(x, edge, this.width - edge);
   }
 
   movePaddle(x) {
-    if (this.phase !== 'ready' && this.phase !== 'serve' && this.phase !== 'playing') return;
+    if (this.phase !== 'ready' && this.phase !== 'countdown' && this.phase !== 'serve' && this.phase !== 'playing') return;
     this.paddleX = this.clampPaddleX(x);
     if (this.phase !== 'playing') this.balls[0].x = this.paddleX;
   }
 
+  updatePaddle(seconds, direction, pointerX) {
+    const keyboardStep = this.paddleSpeed * seconds;
+    const pointerStep = keyboardStep * POINTER_SPEED_MULTIPLIER;
+    const offset = direction || pointerX === undefined
+      ? direction * keyboardStep
+      : clamp(pointerX - this.paddleX, -pointerStep, pointerStep);
+    this.movePaddle(this.paddleX + offset);
+  }
+
   action() {
-    if (this.phase === 'playing') return;
+    if (this.phase === 'playing' || this.phase === 'countdown') return;
+    if (this.phase === 'serve') {
+      this.launchBall();
+      return;
+    }
     if (this.phase === 'lost' || this.phase === 'time-up' || this.phase === 'won') this.reset(this.startLevel);
     if (this.phase === 'level-clear') {
       this.level += 1;
-      this.loadLevel('serve');
+      this.loadLevel('ready');
     }
 
+    this.launchIn = LAUNCH_COUNTDOWN_SECONDS;
+    this.phase = 'countdown';
+  }
+
+  launchBall() {
     const speed = INITIAL_SPEED + (this.level - 1) * 32;
     const direction = this.paddleX > this.width / 2 ? -1 : 1;
     const [ball] = this.balls;
@@ -486,8 +511,14 @@ export class Game {
 
   update(seconds, { direction = 0, pointerX, elapsedSeconds = seconds } = {}) {
     if (this.phase !== 'playing') {
-      this.advanceClock(elapsedSeconds);
-      if (direction) this.movePaddle(this.paddleX + direction * this.paddleSpeed * seconds);
+      this.updatePaddle(seconds, direction, pointerX);
+      if (this.phase === 'countdown') {
+        this.launchIn = Math.max(0, this.launchIn - elapsedSeconds);
+        if (this.launchIn <= CLOCK_EPSILON) {
+          this.launchIn = 0;
+          this.launchBall();
+        }
+      }
       return;
     }
 
@@ -507,13 +538,8 @@ export class Game {
     if (this.effectTimeLeft('guards') === 0) this.guards.length = 0;
     if (this.effectTimeLeft('barrier') === 0) this.barriers.length = 0;
 
-    const keyboardStep = this.paddleSpeed * seconds;
-    const pointerStep = keyboardStep * 1.6;
-    const offset = direction || pointerX === undefined
-      ? direction * keyboardStep
-      : clamp(pointerX - this.paddleX, -pointerStep, pointerStep);
     const paddleStartX = this.paddleX;
-    this.movePaddle(this.paddleX + offset);
+    this.updatePaddle(seconds, direction, pointerX);
     const paddleVelocity = (this.paddleX - paddleStartX) / seconds;
 
     // Newly released balls and shots start moving on the next step.

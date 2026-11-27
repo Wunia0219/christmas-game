@@ -43,6 +43,7 @@ function loadGame() {
       console.error(error);
       gameAnnouncement.textContent = '遊戲載入失敗';
       document.getElementById('message').textContent = '遊戲載入失敗';
+      document.getElementById('overlay').hidden = false;
       document.getElementById('action-label').textContent = '重新載入';
       const action = document.getElementById('action');
       action.disabled = false;
