@@ -34,7 +34,7 @@ const hardFlashDuration = 0.14;
 const ballFlashDuration = 0.26;
 const paddleImpactDuration = 0.11;
 const multiballScoreLift = 34;
-const buffNames = { wide: '球拍加長', fast: '球拍加速', guards: '底線保護', cannons: '雙側砲台' };
+const buffNames = { wide: '球拍加長', guards: '底線保護', cannons: '雙側砲台' };
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const number = (value, digits) => String(value).padStart(digits, '0');
 
@@ -175,7 +175,7 @@ function burstShield(sparks, brick) {
   }
 }
 
-export async function initGame() {
+export async function initGame({ onRunStart } = {}) {
   const app = new Application();
   await app.init({
     width: WIDTH,
@@ -216,6 +216,7 @@ export async function initGame() {
   const game = new Game((event, payload, spawnedBalls) => {
     if (event === 'launch') {
       phaseStartedAt = performance.now();
+      if (payload.firstLaunch) onRunStart?.();
       void playLaunchSound();
       return;
     }
@@ -596,6 +597,7 @@ export async function initGame() {
     keys.clear();
     pointerX = undefined;
     gesture = undefined;
+    game.stopPaddle();
   }
   window.addEventListener('blur', clearMovement);
   document.addEventListener('fullscreenchange', clearMovement);

@@ -6,8 +6,9 @@ const recipients = header.querySelectorAll('.intro-organizations li');
 const actor = document.getElementById('intro-actor');
 const giftLight = document.getElementById('intro-gift-light');
 const wash = document.getElementById('intro-warm-wash');
-const personal = document.getElementById('intro-personal');
-const demo = document.getElementById('intro-demo');
+const playCount = document.getElementById('intro-play-count');
+const increment = document.getElementById('intro-increment');
+const participation = playCount.parentElement;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 const frameDuration = 1000 / 7;
@@ -19,6 +20,7 @@ const recipientHold = 2100;
 const flightDuration = 850;
 const flightDelay = 145;
 const flightStagger = 190;
+const countDelay = 440;
 
 function flyFromGift(recipient, source, index) {
   const target = recipient.getBoundingClientRect();
@@ -44,17 +46,40 @@ function flyFromGift(recipient, source, index) {
   });
 }
 
-export function openEntryIntro({ preview, onGiftOpen }) {
+export function openEntryIntro({ totalPlays, onGiftOpen }) {
   const reduced = reducedMotion.matches;
   const animations = [];
   const startedAt = performance.now();
   let frame;
   let nextFrame;
   let holdTimer;
+  let countTimer;
   let endHold;
   const held = new Promise((resolve) => {
     endHold = resolve;
   });
+
+  function showIncrement() {
+    playCount.textContent = totalPlays.toLocaleString('zh-TW');
+    if (!reduced) {
+      animations.push(playCount.animate([
+        { transform: 'scale(1)' },
+        { transform: 'scale(1.22)', offset: .28 },
+        { transform: 'scale(.97)', offset: .72 },
+        { transform: 'scale(1)' },
+      ], { duration: 420, easing: 'ease-out' }));
+    }
+    animations.push(increment.animate(reduced ? [
+      { opacity: 1 },
+      { opacity: 1, offset: .75 },
+      { opacity: 0 },
+    ] : [
+      { opacity: 0, transform: 'translateY(.35em) scale(.65)' },
+      { opacity: 1, transform: 'translateY(-.12em) scale(1.16)', offset: .18 },
+      { opacity: 1, transform: 'translateY(-.35em) scale(1)', offset: .7 },
+      { opacity: 0, transform: 'translateY(-.85em) scale(.94)' },
+    ], { duration: 1150 }));
+  }
 
   function showFrame(index) {
     if (frame === index) return;
@@ -72,7 +97,7 @@ export function openEntryIntro({ preview, onGiftOpen }) {
           animations.push(flyFromGift(recipient, source, index));
         });
         landingTime = flightDelay + (recipients.length - 1) * flightStagger + flightDuration;
-        for (const caption of [title, preview ? demo : personal]) {
+        for (const caption of [title, participation]) {
           animations.push(caption.animate([{ opacity: 0 }, { opacity: 1 }], {
             delay: landingTime - 120,
             duration: 220,
@@ -80,6 +105,7 @@ export function openEntryIntro({ preview, onGiftOpen }) {
           }));
         }
       }
+      countTimer = setTimeout(showIncrement, landingTime + countDelay);
       holdTimer = setTimeout(endHold, landingTime + recipientHold);
       if (!reduced) onGiftOpen();
     }
@@ -92,8 +118,7 @@ export function openEntryIntro({ preview, onGiftOpen }) {
     if (frame < lastFrame) nextFrame = requestAnimationFrame(step);
   }
 
-  personal.hidden = preview;
-  demo.hidden = !preview;
+  playCount.textContent = (totalPlays - 1).toLocaleString('zh-TW');
   showFrame(reduced ? lastFrame : 0);
   intro.hidden = false;
   intro.focus({ preventScroll: true });
@@ -127,6 +152,7 @@ export function openEntryIntro({ preview, onGiftOpen }) {
     close() {
       cancelAnimationFrame(nextFrame);
       clearTimeout(holdTimer);
+      clearTimeout(countTimer);
       endHold();
       intro.hidden = true;
       header.hidden = true;

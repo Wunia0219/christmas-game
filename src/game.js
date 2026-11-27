@@ -14,7 +14,7 @@ export const CANNON = { inset: 9, muzzleY: PADDLE.y - 12, shotRadius: 3 };
 export const TNT = { delay: 0.75, radius: 47 };
 export const BUFF_DURATION = 12;
 export const SHRINK_DURATION = 5;
-export const BUFFS = ['wide', 'fast', 'guards', 'cannons'];
+export const BUFFS = ['wide', 'guards', 'cannons'];
 
 // The letter coordinates were laid out with 42 × 16 bricks.
 const BRICK_SCALE_X = BRICK.width / 42;
@@ -178,7 +178,12 @@ const INITIAL_SPEED = 365;
 const MAX_SPEED = 585;
 const MIN_PADDLE_SPEED = 700;
 const PADDLE_CROSSING_SECONDS = 1.05;
+const KEYBOARD_START_SPEED_RATIO = 0.25;
+const KEYBOARD_ACCELERATION_SECONDS = 0.10;
+const KEYBOARD_RELEASE_SECONDS = 0.10;
+const KEYBOARD_TURN_BRAKE_SECONDS = 0.055;
 const POINTER_SPEED_MULTIPLIER = 1.25;
+const POINTER_BRAKE_SECONDS = 0.10;
 const PADDLE_EDGE_INSET = 8;
 const PADDLE_GRACE_TIME = 0.045;
 const PADDLE_GRACE_DEPTH = 18;
@@ -325,6 +330,7 @@ export class Game {
     this.width = width;
     this.height = height;
     this.paddleX = this.clampPaddleX(this.paddleX * widthRatio);
+    this.stopPaddle();
     if (this.phase === 'ready' || this.phase === 'countdown' || this.phase === 'serve') this.stageBall();
     return true;
   }
@@ -337,6 +343,7 @@ export class Game {
     this.score = 0;
     this.timeLeft = ROUND_SECONDS;
     this.timeBonus = 0;
+    this.hasLaunchedRun = false;
     this.loadLevel('ready');
   }
 
@@ -349,6 +356,7 @@ export class Game {
     this.playTime = 0;
     this.clearPowerUps();
     this.paddleX = this.width / 2;
+    this.stopPaddle();
     this.stageBall();
     this.launchIn = 0;
     this.phase = phase;
@@ -385,8 +393,7 @@ export class Game {
 
   get paddleSpeed() {
     const travel = this.width - PADDLE.width - PADDLE_EDGE_INSET * 2;
-    const speed = Math.max(MIN_PADDLE_SPEED, travel / PADDLE_CROSSING_SECONDS);
-    return speed * (this.effectTimeLeft('fast') > 0 ? 1.6 : 1);
+    return Math.max(MIN_PADDLE_SPEED, travel / PADDLE_CROSSING_SECONDS);
   }
 
   get countdownRunning() {
@@ -404,13 +411,42 @@ export class Game {
     if (this.phase !== 'playing') this.balls[0].x = this.paddleX;
   }
 
+  stopPaddle() {
+    this.paddleVelocity = 0;
+  }
+
   updatePaddle(seconds, direction, pointerX) {
-    const keyboardStep = this.paddleSpeed * seconds;
-    const pointerStep = keyboardStep * POINTER_SPEED_MULTIPLIER;
-    const offset = direction || pointerX === undefined
-      ? direction * keyboardStep
-      : clamp(pointerX - this.paddleX, -pointerStep, pointerStep);
+    const speed = this.paddleSpeed;
+    if (!direction && pointerX !== undefined) {
+      this.stopPaddle();
+      const target = this.clampPaddleX(pointerX);
+      const distance = Math.abs(target - this.paddleX);
+      const topSpeed = speed * POINTER_SPEED_MULTIPLIER;
+      const braking = topSpeed / POINTER_BRAKE_SECONDS;
+      // Cap the approach speed by the distance available to brake.
+      const travel = Math.min(topSpeed, Math.sqrt(2 * braking * distance)) * seconds;
+      this.movePaddle(travel >= distance ? target : this.paddleX + Math.sign(target - this.paddleX) * travel);
+      return;
+    }
+
+    const targetVelocity = direction * speed;
+    const startVelocity = clamp(this.paddleVelocity, -speed, speed) || targetVelocity * KEYBOARD_START_SPEED_RATIO;
+    let goal = targetVelocity;
+    let acceleration = speed * (1 - KEYBOARD_START_SPEED_RATIO) / KEYBOARD_ACCELERATION_SECONDS;
+    if (!direction) {
+      acceleration = speed / KEYBOARD_RELEASE_SECONDS;
+    } else if (direction * startVelocity < 0) {
+      goal = 0;
+      acceleration = speed / KEYBOARD_TURN_BRAKE_SECONDS;
+    }
+
+    const maxChange = acceleration * seconds;
+    const change = clamp(goal - startVelocity, -maxChange, maxChange);
+    const rampTime = Math.abs(change) / acceleration;
+    this.paddleVelocity = startVelocity + change;
+    const offset = this.paddleVelocity * seconds + (startVelocity - this.paddleVelocity) * rampTime / 2;
     this.movePaddle(this.paddleX + offset);
+    if (this.paddleX === this.clampPaddleX(this.paddleVelocity > 0 ? this.width : 0)) this.stopPaddle();
   }
 
   action() {
@@ -436,7 +472,9 @@ export class Game {
     ball.vx = speed * 0.36 * direction;
     ball.vy = -Math.sqrt(speed ** 2 - ball.vx ** 2);
     this.phase = 'playing';
-    this.onEvent('launch');
+    const firstLaunch = !this.hasLaunchedRun;
+    this.hasLaunchedRun = true;
+    this.onEvent('launch', { firstLaunch });
   }
 
   advanceClock(seconds) {
@@ -511,7 +549,13 @@ export class Game {
 
   update(seconds, { direction = 0, pointerX, elapsedSeconds = seconds } = {}) {
     if (this.phase !== 'playing') {
-      this.updatePaddle(seconds, direction, pointerX);
+      if (this.phase === 'ready' || this.phase === 'countdown' || this.phase === 'serve') {
+        while (seconds > 0 && (direction || pointerX !== undefined || this.paddleVelocity)) {
+          const step = Math.min(seconds, MAX_STEP);
+          this.updatePaddle(step, direction, pointerX);
+          seconds -= step;
+        }
+      }
       if (this.phase === 'countdown') {
         this.launchIn = Math.max(0, this.launchIn - elapsedSeconds);
         if (this.launchIn <= CLOCK_EPSILON) {
@@ -564,6 +608,7 @@ export class Game {
       this.lives -= 1;
       this.phase = this.lives > 0 ? 'serve' : 'lost';
       this.clearPowerUps();
+      this.stopPaddle();
       if (this.lives > 0) {
         this.stageBall();
         this.movePaddle(this.paddleX);
@@ -753,18 +798,28 @@ export class Game {
       return;
     }
 
-    const x = brick.x + brick.width / 2;
-    const y = brick.y + brick.height / 2;
     if (brick.kind === 'extra-ball') {
-      const direction = x < this.width / 2 ? 1 : -1;
-      const spawnedBalls = [[-15, -125], [0, 75], [15, 185], [-24, -230]].map(([offset, speed]) => ({
-        x: x + offset * direction, y, vx: speed * direction, vy: 310, bonus: true,
-      }));
+      // Start just inside the corners so a ball can collide with a close neighbor on its way out.
+      const insetX = Math.min(BALL_RADIUS, brick.width / 2);
+      const left = brick.x + insetX;
+      const right = brick.x + brick.width - insetX;
+      const top = brick.y + BALL_RADIUS;
+      const bottom = brick.y + brick.height - BALL_RADIUS;
+      const horizontalSpeed = 190;
+      const verticalSpeed = 310;
+      const spawnedBalls = [
+        { x: left, y: top, vx: -horizontalSpeed, vy: -verticalSpeed, bonus: true },
+        { x: right, y: top, vx: horizontalSpeed, vy: -verticalSpeed, bonus: true },
+        { x: left, y: bottom, vx: -horizontalSpeed, vy: verticalSpeed, bonus: true },
+        { x: right, y: bottom, vx: horizontalSpeed, vy: verticalSpeed, bonus: true },
+      ];
       this.balls.push(...spawnedBalls);
       this.onEvent('extra-ball', brick, spawnedBalls);
       return;
     }
-    if (brick.kind === 'buff' || brick.kind === 'shrink') this.drops.push({ x, y, kind: brick.kind });
+    if (brick.kind === 'buff' || brick.kind === 'shrink') {
+      this.drops.push({ x: brick.x + brick.width / 2, y: brick.y + brick.height / 2, kind: brick.kind });
+    }
     if (brick.kind === 'shield') this.shieldAdjacentBricks(brick);
     if (brick.kind === 'barrier') {
       this.effects.barrier = this.playTime + BARRIER.duration;

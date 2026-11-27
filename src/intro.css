@@ -9,15 +9,19 @@
 }
 
 .intro-scene {
+  --intro-act-size: min(78vw, 57dvh, 460px);
+  --intro-act-bottom: clamp(52px, 10dvh, 88px);
   position: absolute;
   inset: 0;
   isolation: isolate;
   overflow: hidden;
   display: grid;
-  grid-template-rows: clamp(123px, 25dvh, 198px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   justify-items: center;
-  align-items: center;
-  padding: max(12px, 4dvh, env(safe-area-inset-top)) 10px max(10px, 3dvh, env(safe-area-inset-bottom));
+  align-items: safe end;
+  padding: max(12px, 4dvh, env(safe-area-inset-top)) 10px;
+  /* Tuck the captions into the transparent space at the top of the sprite. */
+  padding-block-end: calc(var(--intro-act-bottom) + var(--intro-act-size) - clamp(6px, 1.6dvh, 14px));
   background: #342016;
   animation: intro-appear 160ms ease-out both;
 }
@@ -44,27 +48,28 @@
 
 .intro-recipients {
   z-index: 1;
-  align-self: end;
   max-width: 100%;
 }
 
 .intro-header {
   display: grid;
   justify-items: center;
-  gap: clamp(4px, 1.2dvh, 11px);
+  gap: clamp(6px, 1.3dvh, 14px);
 }
 
 .intro-header h2 {
   margin: 0;
   color: #fff0d1;
-  font: 400 clamp(1rem, min(4.7vw, 4.2dvh), 1.7rem)/1.4 'Cubic 11', 'Microsoft JhengHei', sans-serif;
+  font: 400 clamp(1.35rem, min(6.8vw, 7.2dvh), 2.8rem)/1.25 'Cubic 11', 'Microsoft JhengHei', sans-serif;
+  text-wrap: balance;
   text-shadow: 0 2px 12px #08121d, 0 0 18px #ffc97c50;
 }
 
 .intro-organizations {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: clamp(13px, 4vw, 44px);
+  gap: 6px clamp(13px, 4vw, 44px);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -75,7 +80,7 @@
   align-items: center;
   gap: clamp(5px, 1.5vw, 13px);
   color: #fff1d3;
-  font-size: clamp(.875rem, 4vw, 1.45rem);
+  font-size: clamp(1rem, min(5vw, 8dvh), 2.15rem);
   font-weight: 800;
   white-space: nowrap;
   text-shadow: 0 2px 4px #24150c, 0 0 17px #ffc57755;
@@ -90,22 +95,38 @@
 }
 
 .intro-participation {
+  position: relative;
   margin: 0;
   color: #ffe0a9;
-  font-size: clamp(.78rem, 2.9vw, .94rem);
+  font-size: clamp(1rem, min(4vw, 6dvh), 1.7rem);
+  line-height: 1.25;
   text-shadow: 0 1px 6px #101522;
 }
 
-.intro-participation strong { font-family: var(--mono); }
+.intro-participation strong {
+  display: inline-block;
+  font: 700 1.85em/1 var(--mono);
+}
+
+.intro-increment {
+  position: absolute;
+  inset-inline-start: calc(100% + .35em);
+  inset-block-end: 0;
+  color: #ffcf6b;
+  font: 700 1.55em/1 var(--mono);
+  text-shadow: 0 2px 4px #2d1609, 0 0 12px #ffab4d80;
+  pointer-events: none;
+  opacity: 0;
+}
 
 .intro-act {
   /* Horizontal anchor of the box within each sprite cell. */
   --intro-box-center: 69%;
   position: absolute;
   left: 50%;
-  bottom: clamp(52px, 10dvh, 88px);
+  bottom: var(--intro-act-bottom);
   translate: calc(0% - var(--intro-box-center)) 0;
-  width: min(78%, 57dvh, 460px);
+  width: var(--intro-act-size);
   aspect-ratio: 1;
 }
 
@@ -208,8 +229,10 @@
 }
 
 @media (max-height: 480px) and (orientation: landscape) {
-  .intro-scene { grid-template-rows: clamp(75px, 27dvh, 120px) minmax(0, 1fr); }
-  .intro-act { bottom: clamp(28px, 9dvh, 42px); }
+  .intro-scene {
+    --intro-act-size: min(78vw, 50dvh, 460px);
+    --intro-act-bottom: clamp(28px, 9dvh, 42px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

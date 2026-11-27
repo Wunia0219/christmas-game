@@ -280,7 +280,11 @@ test('the first launch counts down three seconds with the ball staged and the ro
 });
 
 test('the round clock pauses after a miss and during the next level launch countdown', () => {
-  const game = startGame();
+  const launches = [];
+  const game = new Game((event, payload) => {
+    if (event === 'launch') launches.push(payload.firstLaunch);
+  });
+  launchGame(game);
   sendBallOut(game.balls[0]);
   game.update(0.01);
   assert.equal(game.phase, 'serve');
@@ -322,9 +326,14 @@ test('the round clock pauses after a miss and during the next level launch count
     game.update(0.02, { elapsedSeconds: 1 });
     assert(Math.abs(game.timeLeft - (timeAtClear - 1)) < 1e-9);
   }
+
+  game.update(0, { elapsedSeconds: ROUND_SECONDS });
+  assert.equal(game.phase, 'time-up');
+  launchGame(game);
+  assert.deepEqual(launches, [true, false, false, false, true]);
 });
 
-test('the paddle follows a pointer at the same limited speed before and after serving', () => {
+test('the paddle brakes toward a pointer target before and after serving', () => {
   const distances = [];
   for (const phase of ['ready', 'countdown', 'serve', 'playing']) {
     const game = new Game(() => {});
@@ -341,23 +350,65 @@ test('the paddle follows a pointer at the same limited speed before and after se
     const nearbyTarget = game.paddleX + 2;
     game.update(0.04, { pointerX: nearbyTarget });
     assert.equal(game.paddleX, nearbyTarget);
+
+    const target = nearbyTarget + 120;
+    game.update(0.01, { pointerX: target });
+    const fullSpeedTravel = game.paddleX - nearbyTarget;
+    game.update(0.12, { pointerX: target });
+    const beforeBrakingStep = game.paddleX;
+    game.update(0.01, { pointerX: target });
+    assert(game.paddleX > beforeBrakingStep && game.paddleX < target);
+    assert(game.paddleX - beforeBrakingStep < fullSpeedTravel);
+    game.update(0.10, { pointerX: target });
+    assert.equal(game.paddleX, target);
   }
   assert(distances.every((distance) => Math.abs(distance - distances[0]) < 1e-9));
 });
 
-test('keyboard crosses a wide court in about one second and stops on release', () => {
+test('keyboard crosses a wide court in about one second and stops at the edge', () => {
   const game = new Game(() => {});
   game.resize(997, HEIGHT);
   game.movePaddle(0);
   const rightEdge = game.clampPaddleX(game.width);
 
-  game.update(0.95, { direction: 1, pointerX: 0 });
+  game.update(1.05, { direction: 1, pointerX: 0 });
   assert(game.paddleX < rightEdge);
-  const stoppedAt = game.paddleX;
-  game.update(0.04);
-  assert.equal(game.paddleX, stoppedAt);
-  game.update(0.15, { direction: 1, pointerX: 0 });
+  game.update(0.10, { direction: 1, pointerX: 0 });
   assert.equal(game.paddleX, rightEdge);
+  game.update(0.01, { direction: -1 });
+  assert(game.paddleX < rightEdge);
+});
+
+test('the keyboard accelerates, coasts on release, and brakes faster when reversing', () => {
+  const coasting = new Game(() => {});
+  const turning = new Game(() => {});
+  for (const game of [coasting, turning]) {
+    const start = game.paddleX;
+    game.update(0.025, { direction: 1 });
+    assert(game.paddleX > start);
+    const firstTravel = game.paddleX - start;
+    game.update(0.075, { direction: 1 });
+    const atTopSpeed = game.paddleX;
+    game.update(0.025, { direction: 1 });
+    const fullSpeedTravel = game.paddleX - atTopSpeed;
+    assert(fullSpeedTravel > firstTravel);
+    assert(Math.abs(fullSpeedTravel - game.paddleSpeed * 0.025) < 1e-9);
+  }
+
+  const from = coasting.paddleX;
+  coasting.update(0.04);
+  turning.update(0.04, { direction: -1 });
+  assert(from < turning.paddleX && turning.paddleX < coasting.paddleX);
+  const beforeReverse = turning.paddleX;
+  turning.update(0.055, { direction: -1 });
+  assert(turning.paddleX < beforeReverse);
+
+  const beforeStopping = coasting.paddleX;
+  coasting.update(0.06);
+  assert(coasting.paddleX > beforeStopping);
+  const stoppedAt = coasting.paddleX;
+  coasting.update(0.10);
+  assert.equal(coasting.paddleX, stoppedAt);
 });
 
 test('a paddle arriving just after the ball crosses its top saves the ball', () => {
@@ -369,7 +420,7 @@ test('a paddle arriving just after the ball crosses its top saves the ball', () 
   game.activateBuff('guards');
   const [ball] = game.balls;
   const contactY = PADDLE.y - BALL_RADIUS;
-  const paddleEdgeAtImpact = game.paddleX + PADDLE.width / 2 + 15;
+  const paddleEdgeAtImpact = game.paddleX + PADDLE.width / 2 + 5;
   Object.assign(ball, { x: paddleEdgeAtImpact + BALL_RADIUS, y: contactY - 1, vx: 0, vy: 420 });
 
   game.update(0.008, { direction: 1 });
@@ -417,7 +468,7 @@ test('paddle grace ends when too much time or distance has passed', () => {
   }
 });
 
-test('a multiball brick releases four extra balls, and only losing all balls costs a life', () => {
+test('a multiball brick fires four extra balls outward from its corners', () => {
   const releases = [];
   const misses = [];
   const game = new Game((event, brick, spawnedBalls) => {
@@ -440,14 +491,34 @@ test('a multiball brick releases four extra balls, and only losing all balls cos
   assert.equal(releases.length, 1);
   assert.equal(releases[0].brick, brick);
   assert.equal(releases[0].spawnedBalls.length, extras.length);
-  extras.forEach((ball, index) => assert.equal(releases[0].spawnedBalls[index], ball));
-  assert(extras.every((ball) => ball.bonus && ball.vy > 0));
-  assert.equal(new Set(extras.map(({ vx }) => vx)).size, 4);
-  const initialY = extras[0].y;
+  const left = brick.x + BALL_RADIUS;
+  const right = brick.x + brick.width - BALL_RADIUS;
+  const top = brick.y + BALL_RADIUS;
+  const bottom = brick.y + brick.height - BALL_RADIUS;
+  const corners = [
+    { x: left, y: top, directionX: -1, directionY: -1 },
+    { x: right, y: top, directionX: 1, directionY: -1 },
+    { x: left, y: bottom, directionX: -1, directionY: 1 },
+    { x: right, y: bottom, directionX: 1, directionY: 1 },
+  ];
+  for (const [index, ball] of extras.entries()) {
+    const { x, y, directionX, directionY } = corners[index];
+    assert.equal(releases[0].spawnedBalls[index], ball);
+    assert.equal(ball.bonus, true);
+    assert.equal(ball.x, x);
+    assert.equal(ball.y, y);
+    assert.equal(Math.sign(ball.vx), directionX);
+    assert.equal(Math.sign(ball.vy), directionY);
+  }
+
   sendBallOut(original);
   game.update(0.01);
   assert.deepEqual(game.balls, extras);
-  assert(extras.every((ball) => ball.y > initialY));
+  for (const [index, ball] of extras.entries()) {
+    const { x, y, directionX, directionY } = corners[index];
+    assert.equal(Math.sign(ball.x - x), directionX);
+    assert.equal(Math.sign(ball.y - y), directionY);
+  }
   assert.equal(game.lives, LIVES);
   assert.equal(game.phase, 'playing');
   assert.deepEqual(misses, []);
@@ -466,6 +537,22 @@ test('a multiball brick releases four extra balls, and only losing all balls cos
   assert.equal(game.phase, 'playing');
   assert.equal(game.balls[0].x, game.paddleX);
   assert(game.balls[0].vy < 0);
+});
+
+test('an extra ball can bounce off a brick directly outside its corner', () => {
+  const game = startGame();
+  const source = { ...BRICK, x: 300, y: 100, kind: 'extra-ball', points: 30, active: true };
+  const neighbor = { ...source, x: source.x + source.width + 2, y: source.y - source.height - 2, kind: 'standard' };
+  const distant = { ...neighbor, x: 600 };
+  game.bricks = [source, neighbor, distant];
+  game.remaining = game.bricks.length;
+  hitBrick(game, source);
+
+  const upperRightBall = game.balls[2];
+  game.update(0.025);
+  assert.equal(neighbor.active, false);
+  assert(upperRightBall.vx < 0);
+  assert(distant.active);
 });
 
 test('a life loss reports the last exit location when multiple balls leave in the same step', () => {
@@ -521,7 +608,7 @@ test('buff and nerf drops can be caught just after passing the paddle top', (con
   const catchY = PADDLE.y - DROP_RADIUS;
   for (const [kind, effect] of [['buff', 'wide'], ['shrink', 'shrink']]) {
     const game = startGame();
-    const drop = { x: game.paddleX + PADDLE.width / 2 + DROP_RADIUS + 12, y: catchY - 1, kind };
+    const drop = { x: game.paddleX + PADDLE.width / 2 + DROP_RADIUS + 4, y: catchY - 1, kind };
     game.drops.push(drop);
     game.update(0.012);
     assert(drop.y > catchY);
@@ -859,20 +946,19 @@ test('each raised barrier segment stops one upward attack without scoring or blo
 });
 
 test('timed buffs coexist, refresh, and expire in play', () => {
+  assert.deepEqual(BUFFS, ['wide', 'guards', 'cannons']);
   const game = startGame();
   game.balls[0].vx = 0;
   game.balls[0].vy = 0;
   const normalSpeed = game.paddleSpeed;
   for (const kind of BUFFS) game.activateBuff(kind);
-  assert(game.paddleSpeed > normalSpeed);
+  assert.equal(game.paddleSpeed, normalSpeed);
 
-  const x = game.paddleX;
-  game.update(0.1, { pointerX: x + 400 });
-  assert(game.paddleX - x > normalSpeed * 1.6 * 0.1);
+  game.update(0.1);
   const remaining = game.effectTimeLeft('wide');
   assert(remaining < BUFF_DURATION);
-  game.activateBuff('fast');
-  assert(game.effectTimeLeft('fast') > remaining);
+  game.activateBuff('wide');
+  assert(game.effectTimeLeft('wide') > remaining);
   game.update(BUFF_DURATION + 0.01);
   assert(BUFFS.every((kind) => game.effectTimeLeft(kind) === 0));
   assert.equal(game.guards.length, 0);

@@ -14,6 +14,8 @@ const gameAnnouncement = document.getElementById('announcement');
 const gamePath = new URL(enterGame.href).pathname;
 const lobbyVolume = 0.28;
 const gameMusic = './assets/music/8-ringing_of_bells.mp3';
+const defaultPlayCount = 327;
+const playCountKey = 'christmas-game:play-count';
 
 bindFullscreen(document.getElementById('lobby-fullscreen'), {
   announcement: document.getElementById('lobby-announcement'),
@@ -28,13 +30,39 @@ let gameController;
 let gameLoading;
 let returningToLobby = false;
 let entry;
+let previewRun = false;
+let localPlays = 0;
 
 // A reload starts a new document, even if the URL is a previous game entry.
 if (history.state?.enteredGameFromLobby) history.replaceState(null, '');
 
+function readLocalPlays() {
+  try {
+    const savedPlays = Number(localStorage.getItem(playCountKey));
+    if (Number.isSafeInteger(savedPlays) && savedPlays >= 0) return Math.max(localPlays, savedPlays);
+  } catch {
+    // The page can still count plays when browser storage is unavailable.
+  }
+  return localPlays;
+}
+
+function recordPlay() {
+  if (previewRun) return;
+  const increment = () => {
+    localPlays = readLocalPlays() + 1;
+    try {
+      localStorage.setItem(playCountKey, String(localPlays));
+    } catch {
+      // Keep the count in memory for this visit.
+    }
+  };
+  if (navigator.locks) void navigator.locks.request(playCountKey, increment).catch(increment);
+  else increment();
+}
+
 function loadGame() {
   gameLoading ??= import('./main.js')
-    .then(({ initGame }) => initGame())
+    .then(({ initGame }) => initGame({ onRunStart: recordPlay }))
     .then((controller) => {
       gameController = controller;
       if (showingGame) gameController.setActive(true);
@@ -91,11 +119,12 @@ async function startGame() {
     return;
   }
 
-  const preview = new URLSearchParams(location.search).get('intro') === 'preview';
+  previewRun = new URLSearchParams(location.search).get('intro') === 'preview';
+  const totalPlays = defaultPlayCount + (previewRun ? 0 : readLocalPlays()) + 1;
   const playChime = prepareEntryChime();
   lobby.inert = true;
   gameView.inert = true;
-  const current = openEntryIntro({ preview, onGiftOpen: playChime });
+  const current = openEntryIntro({ totalPlays, onGiftOpen: playChime });
   entry = current;
   // Keep the same fullscreen element alive when changing routes.
   history.pushState({ enteredGameFromLobby: true }, '', enterGame.href);
